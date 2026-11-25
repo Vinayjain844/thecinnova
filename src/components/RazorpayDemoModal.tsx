@@ -1,0 +1,487 @@
+import React, { useState } from 'react';
+import {
+  Building2,
+  CheckCircle2,
+  CreditCard,
+  Loader2,
+  Lock,
+  QrCode,
+  ShieldCheck,
+  Smartphone,
+  Wallet,
+  X,
+} from 'lucide-react';
+import { BookingRecord, UserProfile } from '../types/cinema';
+import { PendingCheckoutPayload } from './BookingModal';
+import { QrCodeMatrix } from './QrCodeMatrix';
+
+interface RazorpayDemoModalProps {
+  checkout: PendingCheckoutPayload | null;
+  user: UserProfile | null;
+  onClose: () => void;
+  onPaymentSuccess: (booking: BookingRecord) => void;
+}
+
+type PaymentTab = 'upi' | 'card' | 'netbanking' | 'wallet';
+
+export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
+  checkout,
+  user,
+  onClose,
+  onPaymentSuccess,
+}) => {
+  const [activeMethod, setActiveMethod] = useState<PaymentTab>('upi');
+  const [upiId, setUpiId] = useState('cinnova@okaxis');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState(user?.name || '');
+  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
+  const [selectedWallet, setSelectedWallet] = useState('Amazon Pay');
+  const [email, setEmail] = useState(user?.email || 'guest@cinnova.app');
+  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [step, setStep] = useState<'checkout' | 'processing' | 'success'>('checkout');
+  const [confirmedBooking, setConfirmedBooking] = useState<BookingRecord | null>(null);
+
+  if (!checkout) return null;
+
+  const orderId = `order_CN${checkout.movie.id.slice(0, 4).toUpperCase()}8492`;
+
+  const formatCardNumber = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  };
+
+  const formatExpiry = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 4);
+    if (digits.length >= 3) {
+      return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    return digits;
+  };
+
+  const fillTestCard = () => {
+    setCardNumber('4111 1111 1111 1111');
+    setCardExpiry('12/29');
+    setCardCvv('123');
+    setCardName(user?.name || 'Aarav Sharma');
+    setErrorMsg('');
+  };
+
+  const handlePayNow = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!email.trim() || !email.includes('@')) {
+      setErrorMsg('Please enter a valid email address for your digital ticket.');
+      return;
+    }
+
+    if (activeMethod === 'upi' && !upiId.includes('@')) {
+      setErrorMsg('Please enter a valid UPI ID (e.g. name@okaxis).');
+      return;
+    }
+
+    if (activeMethod === 'card') {
+      const rawDigits = cardNumber.replace(/\s/g, '');
+      if (rawDigits.length < 16 || cardExpiry.length < 5 || cardCvv.length < 3 || !cardName.trim()) {
+        setErrorMsg('Please enter complete test card details or click "Fill Test Card".');
+        return;
+      }
+    }
+
+    setStep('processing');
+
+    const methodLabel =
+      activeMethod === 'upi'
+        ? `UPI (${upiId})`
+        : activeMethod === 'card'
+        ? `Card •••• ${cardNumber.slice(-4)}`
+        : activeMethod === 'netbanking'
+        ? `Netbanking (${selectedBank})`
+        : `Wallet (${selectedWallet})`;
+
+    window.setTimeout(() => {
+      const randomSuffix = Math.floor(100000 + Math.random() * 900000);
+      const booking: BookingRecord = {
+        bookingId: `CNV-${randomSuffix}`,
+        paymentId: `pay_rzp_demo_${randomSuffix}`,
+        movieId: checkout.movie.id,
+        movieTitle: checkout.movie.title,
+        movieLanguage: checkout.movie.language,
+        movieCertification: checkout.movie.certification,
+        posterImage: checkout.movie.posterImage,
+        city: checkout.city,
+        theatreName: checkout.theatre.name,
+        theatreArea: checkout.theatre.area,
+        dateLabel: checkout.dateLabel,
+        showtime: checkout.showtime.time,
+        format: checkout.showtime.format,
+        screen: checkout.showtime.screen,
+        seats: checkout.seats.map((s) => s.id),
+        ticketSubtotal: checkout.ticketSubtotal,
+        convenienceFee: checkout.convenienceFee,
+        gst: checkout.gst,
+        totalAmount: checkout.totalAmount,
+        paymentMethod: methodLabel,
+        bookedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        customerEmail: email.trim(),
+      };
+
+      setConfirmedBooking(booking);
+      setStep('success');
+      onPaymentSuccess(booking);
+    }, 1300);
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Razorpay Demo Payment Gateway"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/80 p-3 backdrop-blur-xs sm:p-4"
+    >
+      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#16161B]">
+        {/* Razorpay Merchant Header */}
+        <div className="flex items-center justify-between bg-[#072654] px-5 py-4 text-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 font-display text-sm font-bold text-white shadow-sm">
+              CN
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-base font-bold">CinNova Ticketing</h2>
+                <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                  TEST MODE
+                </span>
+              </div>
+              <p className="font-mono-tabular text-[11px] text-blue-200">
+                Razorpay Demo Checkout · {orderId}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className="block text-[10px] text-blue-200 uppercase">Payable</span>
+              <span className="font-mono-tabular text-lg font-bold">₹{checkout.totalAmount}</span>
+            </div>
+            {step !== 'processing' && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close payment gateway"
+                className="rounded-lg p-1.5 text-blue-200 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Step 1: Checkout Form */}
+        {step === 'checkout' && (
+          <form onSubmit={handlePayNow} className="p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-200 bg-[#FAF8F5] px-4 py-2.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/80">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-zinc-900 dark:text-stone-100">
+                  {checkout.movie.title} ({checkout.showtime.format})
+                </p>
+                <p className="truncate text-stone-500 dark:text-zinc-400">
+                  {checkout.theatre.name} · {checkout.dateLabel}, {checkout.showtime.time}
+                </p>
+              </div>
+              <span className="font-mono-tabular font-semibold text-red-600 dark:text-rose-400">
+                Seats: {checkout.seats.map((s) => s.id).join(', ')}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium text-stone-600 dark:text-zinc-400">
+                  Email for QR Ticket
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-600 dark:text-zinc-400">
+                  Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  className="font-mono-tabular mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Choose Payment Option
+              </p>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {(
+                  [
+                    { id: 'upi', label: 'UPI / QR', icon: Smartphone },
+                    { id: 'card', label: 'Card', icon: CreditCard },
+                    { id: 'netbanking', label: 'Netbanking', icon: Building2 },
+                    { id: 'wallet', label: 'Wallets', icon: Wallet },
+                  ] as const
+                ).map((tab) => {
+                  const Icon = tab.icon;
+                  const active = activeMethod === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveMethod(tab.id);
+                        setErrorMsg('');
+                      }}
+                      className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-medium transition-colors ${
+                        active
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-300'
+                          : 'border-stone-200 bg-white text-zinc-600 hover:bg-stone-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-stone-200 bg-[#FAF8F5] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+              {activeMethod === 'upi' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-700 dark:text-stone-200">
+                      Pay via UPI ID or Quick Apps
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUpiId('success@razorpay')}
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Use Test UPI
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    placeholder="username@okaxis"
+                    className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {['Google Pay', 'PhonePe', 'Paytm', 'BHIM'].map((app) => (
+                      <button
+                        key={app}
+                        type="button"
+                        onClick={() => setUpiId(`${app.toLowerCase().replace(' ', '')}@okicici`)}
+                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-blue-500 hover:text-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200"
+                      >
+                        {app}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeMethod === 'card' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-700 dark:text-stone-200">
+                      Credit / Debit Card
+                    </span>
+                    <button
+                      type="button"
+                      onClick={fillTestCard}
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Fill Test Card
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={cardNumber}
+                    onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                    placeholder="Card Number (4111 1111 1111 1111)"
+                    className="font-mono-tabular w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={cardExpiry}
+                      onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                      placeholder="MM/YY"
+                      className="font-mono-tabular rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      type="password"
+                      maxLength={4}
+                      value={cardCvv}
+                      onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                      placeholder="CVV"
+                      className="font-mono-tabular rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    placeholder="Cardholder Name"
+                    className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              {activeMethod === 'netbanking' && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {['HDFC Bank', 'ICICI Bank', 'State Bank of India', 'Axis Bank'].map((bank) => (
+                    <button
+                      key={bank}
+                      type="button"
+                      onClick={() => setSelectedBank(bank)}
+                      className={`rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors ${
+                        selectedBank === bank
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-300'
+                          : 'border-stone-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200'
+                      }`}
+                    >
+                      {bank}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {activeMethod === 'wallet' && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {['Amazon Pay', 'Mobikwik', 'Freecharge', 'Airtel Money'].map((wallet) => (
+                    <button
+                      key={wallet}
+                      type="button"
+                      onClick={() => setSelectedWallet(wallet)}
+                      className={`rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors ${
+                        selectedWallet === wallet
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-300'
+                          : 'border-stone-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200'
+                      }`}
+                    >
+                      {wallet}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {errorMsg && (
+              <p className="mt-3 text-xs font-medium text-red-600 dark:text-rose-400">
+                {errorMsg}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2B6CB0] px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1E4E8C]"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Pay ₹{checkout.totalAmount} (Demo)</span>
+            </button>
+
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <span>Razorpay Demo Test Mode · No real charges apply</span>
+            </div>
+          </form>
+        )}
+
+        {/* Step 2: Processing Spinner */}
+        {step === 'processing' && (
+          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+            <h3 className="mt-4 font-display text-lg font-bold text-zinc-900 dark:text-white">
+              Confirming your seats...
+            </h3>
+            <p className="mt-1 text-sm text-stone-500 dark:text-zinc-400">
+              Verifying demo payment and printing your QR ticket pass.
+            </p>
+          </div>
+        )}
+
+        {/* Step 3: Perforated Cinema Ticket Stub */}
+        {step === 'success' && confirmedBooking && (
+          <div className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <h3 className="font-display text-base font-bold text-emerald-900 dark:text-emerald-200">
+                  You’re all set! Enjoy the show.
+                </h3>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                  M-Ticket sent to {confirmedBooking.customerEmail}
+                </p>
+              </div>
+            </div>
+
+            {/* Perforated Ticket Stub Card */}
+            <div className="relative mt-4 flex flex-col items-center gap-5 overflow-hidden rounded-2xl border border-stone-200 bg-[#FAF8F5] p-5 sm:flex-row dark:border-zinc-800 dark:bg-zinc-900/70">
+              {/* Ticket Stub Side Notches */}
+              <div className="pointer-events-none hidden sm:block absolute left-[172px] -top-2.5 h-5 w-5 rounded-full border border-stone-200 bg-white dark:border-zinc-800 dark:bg-[#16161B]" />
+              <div className="pointer-events-none hidden sm:block absolute left-[172px] -bottom-2.5 h-5 w-5 rounded-full border border-stone-200 bg-white dark:border-zinc-800 dark:bg-[#16161B]" />
+
+              <div className="shrink-0 text-center sm:border-r sm:border-dashed sm:border-stone-300 sm:pr-5 dark:sm:border-zinc-700">
+                <QrCodeMatrix value={confirmedBooking.bookingId} size={128} />
+                <p className="font-mono-tabular mt-2 flex items-center justify-center gap-1 text-xs font-semibold text-zinc-800 dark:text-stone-200">
+                  <QrCode className="h-3.5 w-3.5 text-red-600 dark:text-rose-400" />
+                  {confirmedBooking.bookingId}
+                </p>
+              </div>
+
+              <div className="w-full flex-1 space-y-2 text-sm">
+                <h4 className="font-display text-lg font-bold text-zinc-900 dark:text-white">
+                  {confirmedBooking.movieTitle}
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                  {confirmedBooking.movieLanguage} · {confirmedBooking.format} · {confirmedBooking.movieCertification}
+                </p>
+                <div className="space-y-1.5 border-t border-dashed border-stone-300 pt-2.5 text-xs dark:border-zinc-700">
+                  <p className="text-zinc-700 dark:text-stone-200">
+                    <strong>Theatre:</strong> {confirmedBooking.theatreName}
+                  </p>
+                  <p className="text-zinc-700 dark:text-stone-200">
+                    <strong>Showtime:</strong> {confirmedBooking.dateLabel} at {confirmedBooking.showtime} ({confirmedBooking.screen})
+                  </p>
+                  <p className="font-mono-tabular text-zinc-900 dark:text-white">
+                    <strong>Seats:</strong> {confirmedBooking.seats.join(', ')}
+                  </p>
+                  <p className="font-mono-tabular text-stone-500 dark:text-zinc-400">
+                    <strong>Paid:</strong> ₹{confirmedBooking.totalAmount} · {confirmedBooking.paymentMethod}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-5 h-11 w-full rounded-xl bg-red-600 text-sm font-semibold text-white transition-colors hover:bg-red-700 dark:bg-rose-600 dark:hover:bg-rose-500"
+            >
+              Done & Back to Movies
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
