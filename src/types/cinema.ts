@@ -4,11 +4,10 @@ export type MovieStatus = 'now-showing' | 'upcoming';
 
 export interface Movie {
   id: string;
-  moviegluId?: number;
+  tmdbId?: number;
   title: string;
   tagline: string;
   genres: string[];
-  trailerUrl?: string;
   language: string;
   formats: string[];
   duration: string;
@@ -59,8 +58,8 @@ export interface AdSlide {
   subtitle: string;
   ctaLabel: string;
   image: string;
-  movieId?: string;
-  promoCode?: string;
+  movieId: string;
+  movie: Movie;
 }
 
 export interface ShowtimeSlot {
@@ -117,7 +116,11 @@ export interface BookingRecord {
 }
 
 export interface UserProfile {
+  uid?: string;
   name: string;
   email: string;
   phone: string;
+  preferredCity?: string;
+  provider?: 'google' | 'password';
+  emailVerified?: boolean;
 }

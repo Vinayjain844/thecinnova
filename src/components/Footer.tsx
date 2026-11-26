@@ -2,14 +2,18 @@ import React from 'react';
 import { CategoryTab } from '../types/cinema';
 
 interface FooterProps {
+  isSignedIn: boolean;
   onSelectTab: (tab: CategoryTab) => void;
-  onOpenMyTickets: () => void;
+  onOpenMyBookings: () => void;
+  onOpenMentorGuide: () => void;
   onOpenCityModal: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
+  isSignedIn,
   onSelectTab,
-  onOpenMyTickets,
+  onOpenMyBookings,
+  onOpenMentorGuide,
   onOpenCityModal,
 }) => {
   const handleNavClick = (tab: CategoryTab) => {
@@ -18,81 +22,90 @@ export const Footer: React.FC<FooterProps> = ({
   };
 
   return (
-    <footer className="mt-14 border-t border-stone-200 bg-white transition-colors duration-200 dark:border-zinc-800 dark:bg-[#151519]">
+    <footer className="mt-14 border-t border-slate-200 bg-white transition-colors duration-200 dark:border-blue-500/20 dark:bg-[#0B0F1A]">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-lime-300 ring-1 ring-blue-500/40">
                 <svg viewBox="0 0 32 32" className="h-4 w-4" fill="none" aria-hidden="true">
                   <rect x="4" y="6" width="24" height="20" rx="4" stroke="currentColor" strokeWidth="2.2" />
                   <polygon points="13,11 22,16 13,21" fill="currentColor" />
                 </svg>
               </div>
-              <span className="font-display text-lg font-bold tracking-tight text-zinc-900 dark:text-stone-100">
-                Cin<span className="text-red-600 dark:text-rose-500">Nova</span>
+              <span className="font-display text-lg font-bold tracking-tight text-[#070910] dark:text-slate-100">
+                Cin<span className="text-blue-600 dark:text-lime-400">Nova</span>
               </span>
             </div>
-            <p className="mt-2.5 text-sm text-stone-600 dark:text-zinc-400">
+            <p className="mt-2.5 text-sm text-slate-600 dark:text-slate-400">
               Movie tickets, live auditorium seat selection, and digital QR passes.
             </p>
-            <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-stone-200">
-              Created by <span className="font-semibold text-red-600 dark:text-rose-400">The Neon</span>
+            <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+              Created by <span className="font-semibold text-blue-600 dark:text-lime-400">The Neon</span>
             </p>
           </div>
 
           <nav
             aria-label="Footer navigation"
-            className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-600 dark:text-zinc-400"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400"
           >
             <button
               type="button"
               onClick={() => handleNavClick('all')}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
               All Movies
             </button>
             <button
               type="button"
               onClick={() => handleNavClick('top-rated')}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
               Top Rated
             </button>
             <button
               type="button"
               onClick={() => handleNavClick('now-showing')}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
               Now Showing
             </button>
             <button
               type="button"
               onClick={() => handleNavClick('upcoming')}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
               Upcoming
             </button>
             <button
               type="button"
               onClick={onOpenCityModal}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
               Select City
             </button>
+            {isSignedIn && (
+              <button
+                type="button"
+                onClick={onOpenMyBookings}
+                className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
+              >
+                My Bookings
+              </button>
+            )}
             <button
               type="button"
-              onClick={onOpenMyTickets}
-              className="transition-colors hover:text-zinc-950 whitespace-nowrap dark:hover:text-white"
+              onClick={onOpenMentorGuide}
+              className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
             >
-              My Tickets
+              Mentor and API Guide
             </button>
           </nav>
         </div>
 
-        <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-stone-200/80 pt-6 text-xs text-stone-500 sm:flex-row dark:border-zinc-800 dark:text-zinc-500">
+        <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-slate-200/80 pt-6 text-xs text-slate-500 sm:flex-row dark:border-slate-800 dark:text-slate-500">
           <p>© {new Date().getFullYear()} CinNova. All rights reserved.</p>
-          <p>Cinema data powered by MovieGlu · Created by The Neon</p>
+          <p>Movie catalog powered by TMDB · Created by The Neon</p>
         </div>
       </div>
     </footer>

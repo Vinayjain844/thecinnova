@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  BookOpen,
   ChevronDown,
   MapPin,
   Moon,
@@ -24,7 +25,8 @@ interface HeaderProps {
   activeTab: CategoryTab;
   onSelectTab: (tab: CategoryTab) => void;
   bookingsCount: number;
-  onOpenMyTickets: () => void;
+  onOpenMyBookings: () => void;
+  onOpenMentorGuide: () => void;
 }
 
 /**
@@ -45,7 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onSelectTab,
   bookingsCount,
-  onOpenMyTickets,
+  onOpenMyBookings,
+  onOpenMentorGuide,
 }) => {
   const [logoImgFailed, setLogoImgFailed] = React.useState(false);
 
@@ -57,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200/90 bg-[#FAF8F5]/95 backdrop-blur-md transition-colors duration-200 dark:border-zinc-800/90 dark:bg-[#111114]/95">
+    <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-[#F4F7FC]/95 backdrop-blur-md transition-colors duration-200 dark:border-blue-500/20 dark:bg-[#070910]/95">
       {/* Main Top Bar */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:gap-8 lg:px-8">
         {/* 1. Brand Logo & Name */}
@@ -68,9 +71,9 @@ export const Header: React.FC<HeaderProps> = ({
             onSearchChange('');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="group flex shrink-0 items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+          className="group flex shrink-0 items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-red-600 text-white shadow-sm transition-transform duration-150 group-hover:-rotate-3 group-hover:scale-105">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-lime-300 shadow-sm ring-1 ring-blue-500/40 transition-transform duration-150 group-hover:-rotate-3 group-hover:scale-105">
             {!logoImgFailed ? (
               <img
                 src={CUSTOM_LOGO_SRC}
@@ -85,15 +88,15 @@ export const Header: React.FC<HeaderProps> = ({
               </svg>
             )}
           </div>
-          <span className="font-display text-[22px] font-bold tracking-tight text-zinc-900 whitespace-nowrap dark:text-stone-100">
-            Cin<span className="text-red-600 dark:text-rose-500">Nova</span>
+          <span className="font-display text-[22px] font-bold tracking-tight text-[#070910] whitespace-nowrap dark:text-slate-100">
+            Cin<span className="text-blue-600 dark:text-lime-400">Nova</span>
           </span>
         </button>
 
         {/* 2. Search Bar */}
         <div className="relative hidden max-w-xl flex-1 md:block">
           <Search
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 dark:text-zinc-500"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
             aria-hidden="true"
           />
           <input
@@ -102,14 +105,14 @@ export const Header: React.FC<HeaderProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search movies, genres, languages, or cast..."
             aria-label="Search movies"
-            className="w-full rounded-xl border border-stone-200 bg-white py-2 pl-10 pr-9 text-sm text-zinc-900 placeholder:text-stone-400 shadow-2xs transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 dark:border-zinc-800 dark:bg-[#1A1A1F] dark:text-stone-100 dark:placeholder:text-zinc-500 dark:focus:border-rose-500"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-9 text-sm text-[#070910] placeholder:text-slate-400 shadow-2xs transition-colors focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-[#0D111C] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:ring-lime-400/15"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-stone-400 hover:text-zinc-800 dark:hover:text-stone-200"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-800 dark:hover:text-lime-300"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -121,27 +124,27 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenCityModal}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-stone-200/60 hover:text-zinc-950 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-stone-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-blue-50 hover:text-[#070910] whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-200 dark:hover:bg-[#131926] dark:hover:text-lime-300"
           >
-            <MapPin className="h-4 w-4 text-red-600 dark:text-rose-500" aria-hidden="true" />
+            <MapPin className="h-4 w-4 text-blue-600 dark:text-lime-400" aria-hidden="true" />
             <span>{selectedCity}</span>
-            <ChevronDown className="h-3.5 w-3.5 text-stone-400" aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
           </button>
 
           {user ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onOpenMyTickets}
-                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-semibold text-zinc-800 transition-colors hover:bg-stone-100 whitespace-nowrap dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-stone-100 dark:hover:bg-zinc-800"
+                onClick={onOpenMyBookings}
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#070910] transition-colors hover:border-blue-400 hover:bg-blue-50/50 whitespace-nowrap dark:border-blue-500/30 dark:bg-[#0D111C] dark:text-slate-100 dark:hover:border-lime-400/60 dark:hover:bg-[#131926]"
               >
-                <User className="h-3.5 w-3.5 text-red-600 dark:text-rose-400" />
+                <User className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" />
                 <span className="max-w-[90px] truncate">{user.name.split(' ')[0]}</span>
               </button>
               <button
                 type="button"
                 onClick={onSignOut}
-                className="hidden h-10 items-center rounded-xl px-2.5 text-xs font-medium text-stone-500 hover:text-zinc-900 sm:inline-flex dark:text-zinc-400 dark:hover:text-white"
+                className="hidden h-10 items-center rounded-xl px-2.5 text-xs font-medium text-slate-500 hover:text-blue-600 sm:inline-flex dark:text-slate-400 dark:hover:text-lime-300"
               >
                 Sign out
               </button>
@@ -150,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenSignIn}
-              className="h-10 shrink-0 rounded-xl bg-red-600 px-4 text-xs font-semibold text-white shadow-xs transition-colors duration-150 hover:bg-red-700 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:bg-rose-600 dark:hover:bg-rose-500 dark:focus-visible:ring-offset-zinc-950"
+              className="h-10 shrink-0 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white shadow-xs transition-colors duration-150 hover:bg-blue-500 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300 dark:focus-visible:ring-offset-[#070910]"
             >
               Sign in
             </button>
@@ -161,31 +164,31 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onToggleTheme}
             aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-zinc-700 transition-colors hover:bg-stone-100 hover:text-zinc-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-zinc-800 dark:bg-[#1A1A1F] dark:text-stone-200 dark:hover:bg-zinc-800"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-[#070910] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-800 dark:bg-[#0D111C] dark:text-slate-200 dark:hover:border-blue-500/50 dark:hover:bg-[#131926]"
           >
-            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-zinc-700" />}
+            {isDark ? <Sun className="h-4 w-4 text-lime-400" /> : <Moon className="h-4 w-4 text-blue-600" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Search Bar */}
-      <div className="border-t border-stone-200/70 px-4 py-2 md:hidden dark:border-zinc-800/80">
+      <div className="border-t border-slate-200/70 px-4 py-2 md:hidden dark:border-slate-800/80">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search movies, genres, cast..."
             aria-label="Search movies"
-            className="w-full rounded-xl border border-stone-200 bg-white py-2 pl-9 pr-8 text-sm text-zinc-900 placeholder:text-stone-400 focus:border-red-500 focus:outline-none dark:border-zinc-800 dark:bg-[#1A1A1F] dark:text-stone-100"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-8 text-sm text-[#070910] placeholder:text-slate-400 focus:border-blue-600 focus:outline-none dark:border-slate-800 dark:bg-[#0D111C] dark:text-slate-100"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
             >
               <X className="h-4 w-4" />
             </button>
@@ -194,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Secondary Navigation Row */}
-      <div className="border-t border-stone-200/70 bg-stone-100/75 dark:border-zinc-800/80 dark:bg-[#151519]">
+      <div className="border-t border-slate-200/80 bg-[#EAF0FA]/90 dark:border-slate-800/80 dark:bg-[#0B0F1A]">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <nav
             aria-label="Movie categories"
@@ -207,34 +210,47 @@ export const Header: React.FC<HeaderProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => onSelectTab(item.id)}
-                  className={`relative py-1 text-sm whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:text-red-600 ${
+                  className={`relative py-1 text-sm whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:text-blue-600 ${
                     isActive
-                      ? 'font-semibold text-red-600 dark:text-rose-400'
-                      : 'font-medium text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-stone-100'
+                      ? 'font-semibold text-blue-600 dark:text-lime-400'
+                      : 'font-medium text-slate-600 hover:text-[#070910] dark:text-slate-400 dark:hover:text-slate-100'
                   }`}
                 >
                   {item.label}
                   {isActive && (
-                    <span className="absolute inset-x-0 -bottom-2.5 h-0.5 rounded-full bg-red-600 dark:bg-rose-500" />
+                    <span className="absolute inset-x-0 -bottom-2.5 h-0.5 rounded-full bg-blue-600 dark:bg-lime-400" />
                   )}
                 </button>
               );
             })}
           </nav>
 
-          <button
-            type="button"
-            onClick={onOpenMyTickets}
-            className="flex shrink-0 items-center gap-1.5 py-2 text-xs font-medium text-zinc-600 transition-colors hover:text-red-600 whitespace-nowrap dark:text-zinc-300 dark:hover:text-rose-400"
-          >
-            <Ticket className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>My Tickets</span>
-            {bookingsCount > 0 && (
-              <span className="font-mono-tabular text-xs font-semibold text-red-600 dark:text-rose-400">
-                ({bookingsCount})
-              </span>
+          <div className="flex shrink-0 items-center gap-4">
+            {user && (
+              <button
+                type="button"
+                onClick={onOpenMyBookings}
+                className="flex shrink-0 items-center gap-1.5 py-2 text-xs font-medium text-slate-700 transition-colors hover:text-blue-600 whitespace-nowrap dark:text-slate-200 dark:hover:text-lime-400"
+              >
+                <Ticket className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" aria-hidden="true" />
+                <span>My Bookings</span>
+                {bookingsCount > 0 && (
+                  <span className="font-mono-tabular text-xs font-semibold text-blue-600 dark:text-lime-400">
+                    ({bookingsCount})
+                  </span>
+                )}
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={onOpenMentorGuide}
+              className="flex shrink-0 items-center gap-1.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:text-blue-600 whitespace-nowrap dark:text-slate-300 dark:hover:text-lime-400"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <span>Mentor and API Guide</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

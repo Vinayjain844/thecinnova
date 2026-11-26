@@ -28,22 +28,22 @@ export const CityModal: React.FC<CityModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Select your city"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/70 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#070910]/80 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#16161B]"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-blue-500/25 dark:bg-[#0D111C]"
       >
-        <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-zinc-800">
-          <h2 className="font-display text-lg font-bold text-zinc-900 dark:text-stone-100">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <h2 className="font-display text-lg font-bold text-[#070910] dark:text-slate-100">
             Select Your City
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close city selector"
-            className="rounded-xl p-1.5 text-stone-400 hover:bg-stone-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-white"
+            className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#070910] dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -51,17 +51,17 @@ export const CityModal: React.FC<CityModalProps> = ({
 
         <div className="p-5">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Search for your city..."
-              className="w-full rounded-xl border border-stone-200 bg-[#FAF8F5] py-2.5 pl-10 pr-4 text-sm text-zinc-900 focus:border-red-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+              className="w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-10 pr-4 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
             />
           </div>
 
-          <p className="mt-4 text-xs font-semibold tracking-wider text-stone-500 uppercase dark:text-zinc-400">
+          <p className="mt-4 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
             Popular Cities
           </p>
 
@@ -78,12 +78,16 @@ export const CityModal: React.FC<CityModalProps> = ({
                   }}
                   className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-semibold transition-all ${
                     active
-                      ? 'border-red-600 bg-red-50 text-red-700 dark:border-rose-500 dark:bg-rose-950/40 dark:text-rose-300'
-                      : 'border-stone-200 bg-white text-zinc-700 hover:border-stone-300 hover:bg-stone-50 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-stone-200 dark:hover:bg-zinc-800'
+                      ? 'border-blue-600 bg-blue-600/10 text-blue-700 dark:border-lime-400 dark:bg-lime-400 dark:text-[#070910]'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:bg-blue-50/50 dark:border-slate-800 dark:bg-[#131926] dark:text-slate-200 dark:hover:border-blue-500/50 dark:hover:bg-blue-950/30'
                   }`}
                 >
                   <MapPin
-                    className={`h-4 w-4 ${active ? 'text-red-600 dark:text-rose-400' : 'text-stone-400'}`}
+                    className={`h-4 w-4 ${
+                      active
+                        ? 'text-blue-600 dark:text-[#070910]'
+                        : 'text-slate-400 dark:text-blue-400'
+                    }`}
                   />
                   <span>{city}</span>
                 </button>

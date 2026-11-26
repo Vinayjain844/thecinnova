@@ -11,7 +11,7 @@ interface MovieGridProps {
   selectedGenre: string;
   genres: string[];
   isLoading: boolean;
-  dataSource: 'movieglu' | 'local';
+  dataSource: 'tmdb' | 'local';
   onSelectGenre: (genre: string) => void;
   onSelectMovie: (movie: Movie) => void;
   notifiedIds: string[];
@@ -27,32 +27,50 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   selectedGenre,
   genres,
   isLoading,
-  dataSource,
   onSelectGenre,
   onSelectMovie,
   notifiedIds,
   onToggleNotify,
   onResetFilters,
 }) => {
-  const headingMap: Record<CategoryTab, string> = {
-    all: `Recommended Movies in ${selectedCity}`,
-    'top-rated': `Top Rated Movies in ${selectedCity}`,
-    'now-showing': `Now Showing in ${selectedCity}`,
-    upcoming: `Upcoming Releases in ${selectedCity}`,
+  const headingParts: Record<CategoryTab, { prefix: string; cursive: string; suffix: string }> = {
+    all: { prefix: 'Recommended', cursive: 'Movies', suffix: `in ${selectedCity}` },
+    'top-rated': { prefix: 'Top Rated', cursive: 'Movies', suffix: `in ${selectedCity}` },
+    'now-showing': { prefix: 'Now', cursive: 'Showing', suffix: `in ${selectedCity}` },
+    upcoming: { prefix: 'Upcoming', cursive: 'Releases', suffix: `in ${selectedCity}` },
   };
+
+  const activeHeading = headingParts[activeTab];
+  const ariaHeading = searchQuery.trim()
+    ? `Results for "${searchQuery.trim()}" in ${selectedCity}`
+    : `${activeHeading.prefix} ${activeHeading.cursive} ${activeHeading.suffix}`;
 
   return (
     <section
-      aria-label={headingMap[activeTab]}
+      aria-label={ariaHeading}
       className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
     >
       {/* Section Header & Genre Filter Strip */}
-      <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-zinc-800">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900 sm:text-[30px] dark:text-stone-100">
-            {searchQuery.trim()
-              ? `Results for "${searchQuery.trim()}" in ${selectedCity}`
-              : headingMap[activeTab]}
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[#070910] sm:text-[32px] dark:text-slate-100">
+            {searchQuery.trim() ? (
+              <>
+                Results for{' '}
+                <span className="font-cursive px-1 text-[1.22em] leading-none text-blue-600 dark:text-lime-400">
+                  &ldquo;{searchQuery.trim()}&rdquo;
+                </span>{' '}
+                in {selectedCity}
+              </>
+            ) : (
+              <>
+                {activeHeading.prefix}{' '}
+                <span className="font-cursive px-0.5 text-[1.24em] leading-none text-blue-600 dark:text-lime-400">
+                  {activeHeading.cursive}
+                </span>{' '}
+                {activeHeading.suffix}
+              </>
+            )}
           </h1>
         </div>
 
@@ -69,10 +87,10 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
                 key={genre}
                 type="button"
                 onClick={() => onSelectGenre(genre)}
-                className={`rounded-xl px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 ${
+                className={`rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   active
-                    ? 'bg-zinc-900 text-white dark:bg-rose-600 dark:text-white'
-                    : 'bg-stone-200/70 text-zinc-700 hover:bg-stone-200 hover:text-zinc-950 dark:bg-zinc-800/90 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white'
+                    ? 'bg-blue-600 text-white shadow-xs dark:bg-lime-400 dark:text-[#070910]'
+                    : 'bg-slate-200/80 text-slate-700 hover:bg-blue-100 hover:text-blue-800 dark:bg-[#0D111C] dark:text-slate-300 dark:ring-1 dark:ring-slate-800 dark:hover:ring-blue-500/50 dark:hover:text-lime-300'
                 }`}
               >
                 {genre}
@@ -85,9 +103,9 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
       {/* Loading State */}
       {isLoading ? (
         <div className="mt-10 flex flex-col items-center justify-center py-16 text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-red-600 dark:text-rose-500" />
-          <p className="mt-3 text-sm font-medium text-stone-600 dark:text-zinc-400">
-            Loading movies from MovieGlu...
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-lime-400" />
+          <p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+            Loading movies from TMDB...
           </p>
         </div>
       ) : movies.length > 0 ? (
@@ -104,18 +122,18 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           ))}
         </div>
       ) : (
-        <div className="mt-10 flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center dark:border-zinc-800 dark:bg-[#1A1A1F]">
-          <Film className="h-10 w-10 text-stone-400 dark:text-zinc-500" aria-hidden="true" />
-          <h2 className="mt-3 font-display text-lg font-semibold text-zinc-900 dark:text-stone-100">
+        <div className="mt-10 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-800 dark:bg-[#0D111C]">
+          <Film className="h-10 w-10 text-blue-500 dark:text-lime-400" aria-hidden="true" />
+          <h2 className="mt-3 font-display text-lg font-semibold text-[#070910] dark:text-slate-100">
             No matching movies found
           </h2>
-          <p className="mt-1 max-w-md text-sm text-stone-500 dark:text-zinc-400">
+          <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
             Try clearing your search or switching back to all genres to browse every release.
           </p>
           <button
             type="button"
             onClick={onResetFilters}
-            className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+            className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-blue-500 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
             Reset Filters

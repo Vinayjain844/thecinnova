@@ -1,0 +1,169 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Helpers ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isBoundedString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserPrivateProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'preferredCity', 'provider', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'phone', 'preferredCity', 'provider', 'createdAt', 'updatedAt'])
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && isValidId(data.uid)
+        && isBoundedString(data.name, 1, 80)
+        && isBoundedString(data.email, 3, 160)
+        && (!('phone' in data) || isBoundedString(data.phone, 0, 24))
+        && isBoundedString(data.preferredCity, 1, 60)
+        && data.provider in ['google', 'password']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBooking(data, userId, bookingId) {
+      return data.keys().hasAll([
+          'uid', 'bookingId', 'paymentId', 'movieId', 'movieTitle',
+          'movieLanguage', 'movieCertification', 'city', 'theatreName',
+          'theatreArea', 'dateLabel', 'showtime', 'format', 'screen',
+          'seats', 'ticketSubtotal', 'convenienceFee', 'gst', 'totalAmount',
+          'paymentMethod', 'bookedAt', 'customerEmail', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'bookingId', 'paymentId', 'movieId', 'movieTitle',
+          'movieLanguage', 'movieCertification', 'posterImage', 'city',
+          'theatreName', 'theatreArea', 'dateLabel', 'showtime', 'format',
+          'screen', 'seats', 'ticketSubtotal', 'convenienceFee', 'gst',
+          'totalAmount', 'paymentMethod', 'bookedAt', 'customerEmail', 'createdAt'
+        ])
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.bookingId == bookingId
+        && isValidId(data.bookingId)
+        && isBoundedString(data.paymentId, 4, 64)
+        && isBoundedString(data.movieId, 1, 64)
+        && isBoundedString(data.movieTitle, 1, 160)
+        && isBoundedString(data.movieLanguage, 1, 60)
+        && isBoundedString(data.movieCertification, 1, 20)
+        && (!('posterImage' in data) || isBoundedString(data.posterImage, 0, 500))
+        && isBoundedString(data.city, 1, 60)
+        && isBoundedString(data.theatreName, 1, 140)
+        && isBoundedString(data.theatreArea, 1, 140)
+        && isBoundedString(data.dateLabel, 1, 40)
+        && isBoundedString(data.showtime, 1, 30)
+        && isBoundedString(data.format, 1, 40)
+        && isBoundedString(data.screen, 1, 40)
+        && data.seats is list
+        && data.seats.size() >= 1
+        && data.seats.size() <= 8
+        && data.seats[0] is string
+        && data.seats[0].size() <= 10
+        && (data.ticketSubtotal is int || data.ticketSubtotal is float) && data.ticketSubtotal >= 0
+        && (data.convenienceFee is int || data.convenienceFee is float) && data.convenienceFee >= 0
+        && (data.gst is int || data.gst is float) && data.gst >= 0
+        && (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0
+        && isBoundedString(data.paymentMethod, 1, 60)
+        && isBoundedString(data.bookedAt, 1, 60)
+        && isBoundedString(data.customerEmail, 3, 160)
+        && data.createdAt == request.time;
+    }
+
+    function isValidCalendarAlert(data, userId, movieId) {
+      return data.keys().hasAll(['uid', 'movieId', 'title', 'releaseDate', 'genres', 'language', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'movieId', 'title', 'releaseDate', 'genres', 'language', 'posterImage', 'createdAt'])
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.movieId == movieId
+        && isValidId(data.movieId)
+        && isBoundedString(data.title, 1, 160)
+        && isBoundedString(data.releaseDate, 1, 40)
+        && data.genres is list
+        && data.genres.size() >= 1
+        && data.genres.size() <= 5
+        && data.genres[0] is string
+        && data.genres[0].size() <= 40
+        && isBoundedString(data.language, 1, 60)
+        && (!('posterImage' in data) || isBoundedString(data.posterImage, 0, 500))
+        && data.createdAt == request.time;
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow read, write: if false;
+
+      match /private/profile {
+        allow get: if isValidId(userId) && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && isOwner(userId)
+          && isValidUserPrivateProfile(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId)
+          && isOwner(userId)
+          && isValidUserPrivateProfile(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().email == existing().email
+          && incoming().provider == existing().provider
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'preferredCity', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /bookings/{bookingId} {
+        allow get: if isValidId(userId) && isValidId(bookingId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.uid == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(bookingId)
+          && isOwner(userId)
+          && isValidBooking(incoming(), userId, bookingId);
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(bookingId) && isOwner(userId) && existing().uid == request.auth.uid;
+      }
+
+      match /calendarAlerts/{movieId} {
+        allow get: if isValidId(userId) && isValidId(movieId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.uid == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(movieId)
+          && isOwner(userId)
+          && isValidCalendarAlert(incoming(), userId, movieId);
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(movieId) && isOwner(userId) && existing().uid == request.auth.uid;
+      }
+    }
+  }
+}

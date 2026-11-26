@@ -140,23 +140,23 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Razorpay Demo Payment Gateway"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/80 p-3 backdrop-blur-xs sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#070910]/85 p-3 backdrop-blur-xs sm:p-4"
     >
-      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#16161B]">
+      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-blue-500/25 dark:bg-[#0D111C]">
         {/* Razorpay Merchant Header */}
-        <div className="flex items-center justify-between bg-[#072654] px-5 py-4 text-white">
+        <div className="flex items-center justify-between border-b border-blue-500/25 bg-[#070910] px-5 py-4 text-white">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 font-display text-sm font-bold text-white shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-display text-sm font-bold text-white shadow-sm ring-1 ring-lime-400/50">
               CN
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-display text-base font-bold">CinNova Ticketing</h2>
-                <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                <span className="rounded bg-lime-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-lime-400">
                   TEST MODE
                 </span>
               </div>
-              <p className="font-mono-tabular text-[11px] text-blue-200">
+              <p className="font-mono-tabular text-[11px] text-blue-300">
                 Razorpay Demo Checkout · {orderId}
               </p>
             </div>
@@ -164,15 +164,15 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="block text-[10px] text-blue-200 uppercase">Payable</span>
-              <span className="font-mono-tabular text-lg font-bold">₹{checkout.totalAmount}</span>
+              <span className="block text-[10px] text-blue-300 uppercase">Payable</span>
+              <span className="font-mono-tabular text-lg font-bold text-lime-400">₹{checkout.totalAmount}</span>
             </div>
             {step !== 'processing' && (
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close payment gateway"
-                className="rounded-lg p-1.5 text-blue-200 hover:bg-white/10 hover:text-white"
+                className="rounded-lg p-1.5 text-blue-300 hover:bg-white/10 hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -183,23 +183,23 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
         {/* Step 1: Checkout Form */}
         {step === 'checkout' && (
           <form onSubmit={handlePayNow} className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-200 bg-[#FAF8F5] px-4 py-2.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/80">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-[#F4F7FC] px-4 py-2.5 text-xs dark:border-slate-800 dark:bg-[#070910]">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-zinc-900 dark:text-stone-100">
+                <p className="truncate font-semibold text-[#070910] dark:text-slate-100">
                   {checkout.movie.title} ({checkout.showtime.format})
                 </p>
-                <p className="truncate text-stone-500 dark:text-zinc-400">
+                <p className="truncate text-slate-500 dark:text-slate-400">
                   {checkout.theatre.name} · {checkout.dateLabel}, {checkout.showtime.time}
                 </p>
               </div>
-              <span className="font-mono-tabular font-semibold text-red-600 dark:text-rose-400">
+              <span className="font-mono-tabular font-semibold text-blue-600 dark:text-lime-400">
                 Seats: {checkout.seats.map((s) => s.id).join(', ')}
               </span>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-stone-600 dark:text-zinc-400">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
                   Email for QR Ticket
                 </label>
                 <input
@@ -207,11 +207,11 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-600 dark:text-zinc-400">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
                   Mobile Number
                 </label>
                 <input
@@ -219,13 +219,13 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="font-mono-tabular mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  className="font-mono-tabular mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                 />
               </div>
             </div>
 
             <div className="mt-5">
-              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Choose Payment Option
               </p>
               <div className="mt-2 grid grid-cols-4 gap-2">
@@ -249,8 +249,8 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                       }}
                       className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-medium transition-colors ${
                         active
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-300'
-                          : 'border-stone-200 bg-white text-zinc-600 hover:bg-stone-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                          ? 'border-blue-600 bg-blue-600/10 text-blue-700 dark:border-lime-400 dark:bg-lime-400/15 dark:text-lime-400'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#131926] dark:text-slate-400 dark:hover:bg-slate-800'
                       }`}
                     >
                       <Icon className="h-4 w-4" />
@@ -261,17 +261,17 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-stone-200 bg-[#FAF8F5] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-[#F4F7FC] p-4 dark:border-slate-800 dark:bg-[#070910]">
               {activeMethod === 'upi' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-700 dark:text-stone-200">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                       Pay via UPI ID or Quick Apps
                     </span>
                     <button
                       type="button"
                       onClick={() => setUpiId('success@razorpay')}
-                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-lime-400"
                     >
                       Use Test UPI
                     </button>
@@ -281,7 +281,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
                     placeholder="username@okaxis"
-                    className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                   />
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     {['Google Pay', 'PhonePe', 'Paytm', 'BHIM'].map((app) => (
@@ -289,7 +289,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                         key={app}
                         type="button"
                         onClick={() => setUpiId(`${app.toLowerCase().replace(' ', '')}@okicici`)}
-                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-blue-500 hover:text-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:bg-[#131926] dark:text-slate-200 dark:hover:border-lime-400 dark:hover:text-lime-400"
                       >
                         {app}
                       </button>
@@ -301,13 +301,13 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
               {activeMethod === 'card' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-700 dark:text-stone-200">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                       Credit / Debit Card
                     </span>
                     <button
                       type="button"
                       onClick={fillTestCard}
-                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-lime-400"
                     >
                       Fill Test Card
                     </button>
@@ -317,7 +317,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                     value={cardNumber}
                     onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                     placeholder="Card Number (4111 1111 1111 1111)"
-                    className="font-mono-tabular w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    className="font-mono-tabular w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     <input
@@ -325,7 +325,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                       value={cardExpiry}
                       onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
                       placeholder="MM/YY"
-                      className="font-mono-tabular rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                      className="font-mono-tabular rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                     />
                     <input
                       type="password"
@@ -333,7 +333,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                       value={cardCvv}
                       onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
                       placeholder="CVV"
-                      className="font-mono-tabular rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                      className="font-mono-tabular rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                     />
                   </div>
                   <input
@@ -341,7 +341,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                     value={cardName}
                     onChange={(e) => setCardName(e.target.value)}
                     placeholder="Cardholder Name"
-                    className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#070910] focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-black dark:text-white dark:focus:border-lime-400 dark:focus:bg-black"
                   />
                 </div>
               )}
@@ -355,8 +355,8 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                       onClick={() => setSelectedBank(bank)}
                       className={`rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors ${
                         selectedBank === bank
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-300'
-                          : 'border-stone-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200'
+                          ? 'border-blue-600 bg-blue-600/10 text-blue-700 dark:border-lime-400 dark:bg-lime-400/15 dark:text-lime-400'
+                          : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-[#131926] dark:text-slate-200'
                       }`}
                     >
                       {bank}
@@ -374,8 +374,8 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
                       onClick={() => setSelectedWallet(wallet)}
                       className={`rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors ${
                         selectedWallet === wallet
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-300'
-                          : 'border-stone-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-stone-200'
+                          ? 'border-blue-600 bg-blue-600/10 text-blue-700 dark:border-lime-400 dark:bg-lime-400/15 dark:text-lime-400'
+                          : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-[#131926] dark:text-slate-200'
                       }`}
                     >
                       {wallet}
@@ -386,21 +386,21 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
             </div>
 
             {errorMsg && (
-              <p className="mt-3 text-xs font-medium text-red-600 dark:text-rose-400">
+              <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">
                 {errorMsg}
               </p>
             )}
 
             <button
               type="submit"
-              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2B6CB0] px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1E4E8C]"
+              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300"
             >
               <Lock className="h-4 w-4" />
               <span>Pay ₹{checkout.totalAmount} (Demo)</span>
             </button>
 
-            <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+              <ShieldCheck className="h-3.5 w-3.5 text-lime-500 dark:text-lime-400" />
               <span>Razorpay Demo Test Mode · No real charges apply</span>
             </div>
           </form>
@@ -409,11 +409,11 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
         {/* Step 2: Processing Spinner */}
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-            <h3 className="mt-4 font-display text-lg font-bold text-zinc-900 dark:text-white">
+            <Loader2 className="h-10 w-10 animate-spin text-blue-600 dark:text-lime-400" />
+            <h3 className="mt-4 font-display text-lg font-bold text-[#070910] dark:text-white">
               Confirming your seats...
             </h3>
-            <p className="mt-1 text-sm text-stone-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Verifying demo payment and printing your QR ticket pass.
             </p>
           </div>
@@ -422,50 +422,50 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
         {/* Step 3: Perforated Cinema Ticket Stub */}
         {step === 'success' && confirmedBooking && (
           <div className="p-5 sm:p-6">
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
-              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div className="flex items-center gap-3 rounded-xl border border-lime-500/40 bg-lime-50 p-3.5 dark:border-lime-400/35 dark:bg-lime-400/10">
+              <CheckCircle2 className="h-6 w-6 shrink-0 text-lime-600 dark:text-lime-400" />
               <div>
-                <h3 className="font-display text-base font-bold text-emerald-900 dark:text-emerald-200">
+                <h3 className="font-display text-base font-bold text-[#070910] dark:text-lime-200">
                   You’re all set! Enjoy the show.
                 </h3>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                <p className="text-xs text-slate-700 dark:text-lime-300/90">
                   M-Ticket sent to {confirmedBooking.customerEmail}
                 </p>
               </div>
             </div>
 
             {/* Perforated Ticket Stub Card */}
-            <div className="relative mt-4 flex flex-col items-center gap-5 overflow-hidden rounded-2xl border border-stone-200 bg-[#FAF8F5] p-5 sm:flex-row dark:border-zinc-800 dark:bg-zinc-900/70">
+            <div className="relative mt-4 flex flex-col items-center gap-5 overflow-hidden rounded-2xl border border-slate-200 bg-[#F4F7FC] p-5 sm:flex-row dark:border-slate-800 dark:bg-[#070910]">
               {/* Ticket Stub Side Notches */}
-              <div className="pointer-events-none hidden sm:block absolute left-[172px] -top-2.5 h-5 w-5 rounded-full border border-stone-200 bg-white dark:border-zinc-800 dark:bg-[#16161B]" />
-              <div className="pointer-events-none hidden sm:block absolute left-[172px] -bottom-2.5 h-5 w-5 rounded-full border border-stone-200 bg-white dark:border-zinc-800 dark:bg-[#16161B]" />
+              <div className="pointer-events-none hidden sm:block absolute left-[172px] -top-2.5 h-5 w-5 rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0D111C]" />
+              <div className="pointer-events-none hidden sm:block absolute left-[172px] -bottom-2.5 h-5 w-5 rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0D111C]" />
 
-              <div className="shrink-0 text-center sm:border-r sm:border-dashed sm:border-stone-300 sm:pr-5 dark:sm:border-zinc-700">
+              <div className="shrink-0 text-center sm:border-r sm:border-dashed sm:border-slate-300 sm:pr-5 dark:sm:border-slate-700">
                 <QrCodeMatrix value={confirmedBooking.bookingId} size={128} />
-                <p className="font-mono-tabular mt-2 flex items-center justify-center gap-1 text-xs font-semibold text-zinc-800 dark:text-stone-200">
-                  <QrCode className="h-3.5 w-3.5 text-red-600 dark:text-rose-400" />
+                <p className="font-mono-tabular mt-2 flex items-center justify-center gap-1 text-xs font-semibold text-[#070910] dark:text-slate-200">
+                  <QrCode className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" />
                   {confirmedBooking.bookingId}
                 </p>
               </div>
 
               <div className="w-full flex-1 space-y-2 text-sm">
-                <h4 className="font-display text-lg font-bold text-zinc-900 dark:text-white">
+                <h4 className="font-display text-lg font-bold text-[#070910] dark:text-white">
                   {confirmedBooking.movieTitle}
                 </h4>
-                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {confirmedBooking.movieLanguage} · {confirmedBooking.format} · {confirmedBooking.movieCertification}
                 </p>
-                <div className="space-y-1.5 border-t border-dashed border-stone-300 pt-2.5 text-xs dark:border-zinc-700">
-                  <p className="text-zinc-700 dark:text-stone-200">
+                <div className="space-y-1.5 border-t border-dashed border-slate-300 pt-2.5 text-xs dark:border-slate-700">
+                  <p className="text-slate-700 dark:text-slate-200">
                     <strong>Theatre:</strong> {confirmedBooking.theatreName}
                   </p>
-                  <p className="text-zinc-700 dark:text-stone-200">
+                  <p className="text-slate-700 dark:text-slate-200">
                     <strong>Showtime:</strong> {confirmedBooking.dateLabel} at {confirmedBooking.showtime} ({confirmedBooking.screen})
                   </p>
-                  <p className="font-mono-tabular text-zinc-900 dark:text-white">
+                  <p className="font-mono-tabular text-[#070910] dark:text-lime-400">
                     <strong>Seats:</strong> {confirmedBooking.seats.join(', ')}
                   </p>
-                  <p className="font-mono-tabular text-stone-500 dark:text-zinc-400">
+                  <p className="font-mono-tabular text-slate-500 dark:text-slate-400">
                     <strong>Paid:</strong> ₹{confirmedBooking.totalAmount} · {confirmedBooking.paymentMethod}
                   </p>
                 </div>
@@ -475,7 +475,7 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="mt-5 h-11 w-full rounded-xl bg-red-600 text-sm font-semibold text-white transition-colors hover:bg-red-700 dark:bg-rose-600 dark:hover:bg-rose-500"
+              className="mt-5 h-11 w-full rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-500 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300"
             >
               Done & Back to Movies
             </button>

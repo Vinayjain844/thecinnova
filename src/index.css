@@ -5,15 +5,30 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-cursive: 'Dancing Script', 'Brush Script MT', cursive;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --cinnova-midnight: #070910;
+    --cinnova-cobalt: #2563eb;
+    --cinnova-lime: #a3e635;
   }
 
   body {
     font-family: var(--font-sans);
   }
 
+  ::selection {
+    background-color: #a3e635;
+    color: #070910;
+  }
+
   h1, h2, h3, .font-display {
     font-family: var(--font-display);
+  }
+
+  .font-cursive {
+    font-family: var(--font-cursive);
+    font-weight: 700;
+    letter-spacing: 0.01em;
   }
 
   .font-mono-tabular {

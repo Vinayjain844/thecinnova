@@ -40,10 +40,10 @@ interface BookingModalProps {
 }
 
 const DATE_OPTIONS = [
-  { id: 'today', day: 'Today', dateNum: '25 Nov', label: 'Wed, 25 Nov', isoDate: '2026-11-25' },
-  { id: 'tomorrow', day: 'Thu', dateNum: '26 Nov', label: 'Thu, 26 Nov', isoDate: '2026-11-26' },
-  { id: 'fri', day: 'Fri', dateNum: '27 Nov', label: 'Fri, 27 Nov', isoDate: '2026-11-27' },
-  { id: 'sat', day: 'Sat', dateNum: '28 Nov', label: 'Sat, 28 Nov', isoDate: '2026-11-28' },
+  { id: 'today', day: 'Today', dateNum: '25 Nov', label: 'Wed, 25 Nov' },
+  { id: 'tomorrow', day: 'Thu', dateNum: '26 Nov', label: 'Thu, 26 Nov' },
+  { id: 'fri', day: 'Fri', dateNum: '27 Nov', label: 'Fri, 27 Nov' },
+  { id: 'sat', day: 'Sat', dateNum: '28 Nov', label: 'Sat, 28 Nov' },
 ];
 
 const ROWS_CONFIG: { row: string; tier: SeatTierName; basePrice: number }[] = [
@@ -97,14 +97,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [lockSecondsLeft, setLockSecondsLeft] = useState(300);
   const [seatLimitWarning, setSeatLimitWarning] = useState(false);
 
-  const fallbackTheatres = useMemo(() => getTheatresForCity(city), [city]);
-  const [liveTheatres, setLiveTheatres] = useState<Theatre[] | null>(null);
-  const theatres = liveTheatres && liveTheatres.length > 0 ? liveTheatres : fallbackTheatres;
+  const theatres = useMemo(() => getTheatresForCity(city), [city]);
   const activeDate = DATE_OPTIONS[selectedDateIdx];
 
   useEffect(() => {
     setHydratedMovie(movie);
-    setLiveTheatres(null);
     setSelectedDateIdx(0);
     setSelectedTheatre(null);
     setSelectedShowtime(null);
@@ -112,9 +109,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setLockSecondsLeft(300);
     setSeatLimitWarning(false);
 
-    if (!movie?.moviegluId) return;
+    if (!movie?.tmdbId) return;
     let cancelled = false;
-    fetch(`/api/movieglu/movie/${movie.moviegluId}?city=${encodeURIComponent(city)}`)
+    fetch(`/api/tmdb/movie/${movie.tmdbId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data?.movie) {
@@ -128,34 +125,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [movie?.id, movie?.moviegluId, city]);
-
-  // Fetch MovieGlu live showtimes for selected movie, city, and date
-  useEffect(() => {
-    if (!movie?.moviegluId || movie.status === 'upcoming') {
-      setLiveTheatres(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(
-      `/api/movieglu/showtimes/${movie.moviegluId}?city=${encodeURIComponent(city)}&date=${encodeURIComponent(activeDate.isoDate)}`
-    )
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.source === 'movieglu' && Array.isArray(data.theatres) && data.theatres.length > 0) {
-          setLiveTheatres(data.theatres);
-        } else if (!cancelled) {
-          setLiveTheatres(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLiveTheatres(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [movie?.moviegluId, movie?.status, city, activeDate.isoDate]);
+  }, [movie?.id, movie?.tmdbId, city]);
 
   useEffect(() => {
     if (selectedSeatIds.length === 0) {
@@ -289,15 +259,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={`Book tickets for ${activeMovie.title}`}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/75 p-2 backdrop-blur-xs sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#070910]/85 p-2 backdrop-blur-xs sm:p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-[#FAF8F5] shadow-2xl dark:border-zinc-800 dark:bg-[#141418]"
+        className="relative flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-[#F4F7FC] shadow-2xl dark:border-blue-500/25 dark:bg-[#070910]"
       >
         {/* Top Modal Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-stone-200 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-[#1A1A1F]">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3.5 dark:border-slate-800 dark:bg-[#0D111C]">
           <div className="flex min-w-0 items-center gap-3">
             {isSeatStep && (
               <button
@@ -307,7 +277,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   setSelectedTheatre(null);
                   setSelectedSeatIds([]);
                 }}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-stone-200 text-zinc-700 hover:bg-stone-100 dark:border-zinc-700 dark:text-stone-200 dark:hover:bg-zinc-800"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-[#070910] hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 aria-label="Back to showtimes"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -315,14 +285,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="font-display truncate text-lg font-bold text-zinc-900 sm:text-xl dark:text-stone-100">
+                <h2 className="font-display truncate text-lg font-bold text-[#070910] sm:text-xl dark:text-slate-100">
                   {activeMovie.title}
                 </h2>
-                <span className="font-mono-tabular shrink-0 text-xs font-medium text-stone-500 dark:text-zinc-400">
+                <span className="font-mono-tabular shrink-0 text-xs font-medium text-blue-600 dark:text-lime-400">
                   {activeMovie.certification}
                 </span>
               </div>
-              <p className="truncate text-xs text-stone-500 dark:text-zinc-400">
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                 {isSeatStep && selectedTheatre && selectedShowtime
                   ? `${selectedTheatre.name} · ${activeDate.label} · ${selectedShowtime.time} (${selectedShowtime.format})`
                   : `${activeMovie.genres.join(' · ')} · ${activeMovie.duration} · ${activeMovie.language}`}
@@ -334,7 +304,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close booking dialog"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-[#070910] dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -343,58 +313,58 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         {/* Step 1: Movie Details & Showtimes */}
         {!isSeatStep ? (
           <div className="overflow-y-auto p-5 sm:p-6">
-            <div className="flex flex-col gap-6 border-b border-stone-200 pb-6 md:flex-row dark:border-zinc-800">
-              <div className="mx-auto h-60 w-40 shrink-0 overflow-hidden rounded-xl bg-zinc-900 shadow-md md:mx-0">
+            <div className="flex flex-col gap-6 border-b border-slate-200 pb-6 md:flex-row dark:border-slate-800">
+              <div className="mx-auto h-60 w-40 shrink-0 overflow-hidden rounded-xl bg-[#0B0F1A] shadow-md md:mx-0">
                 <PosterArtwork movie={activeMovie} />
               </div>
 
               <div className="flex-1">
-                <p className="text-xs font-semibold tracking-wide text-red-600 uppercase dark:text-rose-400">
+                <p className="text-xs font-semibold tracking-wide text-blue-600 uppercase dark:text-lime-400">
                   {activeMovie.status === 'upcoming'
                     ? `Releasing ${activeMovie.releaseDate}`
                     : 'Now Playing in Cinemas'}
                 </p>
-                <p className="mt-1 text-base font-medium italic text-stone-600 dark:text-zinc-300">
-                  "{activeMovie.tagline}"
+                <p className="mt-1 text-base font-medium italic text-slate-600 dark:text-slate-300">
+                  &ldquo;{activeMovie.tagline}&rdquo;
                 </p>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                   {activeMovie.synopsis}
                 </p>
 
-                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-stone-600 dark:text-zinc-400">
-                  <span className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-stone-100">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5 font-semibold text-[#070910] dark:text-slate-100">
+                    <Star className="h-4 w-4 fill-lime-400 text-lime-500 dark:text-lime-400" />
                     <span className="font-mono-tabular">{activeMovie.rating.toFixed(1)}/10</span>
-                    <span className="font-normal text-stone-500">({activeMovie.votes})</span>
+                    <span className="font-normal text-slate-500">({activeMovie.votes})</span>
                   </span>
                   <span>
                     Director:{' '}
-                    <strong className="font-medium text-zinc-900 dark:text-stone-200">
+                    <strong className="font-medium text-[#070910] dark:text-slate-200">
                       {activeMovie.director}
                     </strong>
                   </span>
                   <span>
                     Cast:{' '}
-                    <strong className="font-medium text-zinc-900 dark:text-stone-200">
+                    <strong className="font-medium text-[#070910] dark:text-slate-200">
                       {activeMovie.cast.join(', ')}
                     </strong>
                   </span>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-800 dark:text-stone-300">Formats:</span>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-medium text-[#070910] dark:text-slate-300">Formats:</span>
                   <span>{activeMovie.formats.join(' / ')}</span>
                 </div>
               </div>
             </div>
 
             {activeMovie.status === 'upcoming' ? (
-              <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-stone-200 bg-white p-5 sm:flex-row sm:items-center dark:border-zinc-800 dark:bg-[#1A1A1F]">
+              <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center dark:border-blue-500/20 dark:bg-[#0D111C]">
                 <div>
-                  <h3 className="font-display text-base font-bold text-zinc-900 dark:text-stone-100">
+                  <h3 className="font-display text-base font-bold text-[#070910] dark:text-slate-100">
                     Advance bookings opening soon in {city}
                   </h3>
-                  <p className="mt-1 text-sm text-stone-500 dark:text-zinc-400">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     Scheduled release on {activeMovie.releaseDate}. Turn on alerts to grab front-center seats first.
                   </p>
                 </div>
@@ -403,8 +373,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   onClick={() => onToggleNotify(activeMovie.id)}
                   className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-4 text-xs font-semibold transition-colors ${
                     isNotified
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-red-600 text-white hover:bg-red-700'
+                      ? 'bg-lime-400 text-[#070910] hover:bg-lime-300'
+                      : 'bg-blue-600 text-white hover:bg-blue-500'
                   }`}
                 >
                   {isNotified ? <Check className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
@@ -414,8 +384,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             ) : (
               <div className="mt-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="flex items-center gap-2 font-display text-base font-bold text-zinc-900 dark:text-stone-100">
-                    <Calendar className="h-4 w-4 text-red-600 dark:text-rose-400" />
+                  <h3 className="flex items-center gap-2 font-display text-base font-bold text-[#070910] dark:text-slate-100">
+                    <Calendar className="h-4 w-4 text-blue-600 dark:text-lime-400" />
                     Pick a Date & Showtime in {city}
                   </h3>
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
@@ -428,14 +398,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                           onClick={() => setSelectedDateIdx(idx)}
                           className={`flex shrink-0 flex-col items-center rounded-xl px-3.5 py-2 text-xs transition-colors whitespace-nowrap ${
                             active
-                              ? 'bg-red-600 text-white shadow-xs dark:bg-rose-600'
-                              : 'border border-stone-200 bg-white text-zinc-700 hover:bg-stone-100 dark:border-zinc-800 dark:bg-[#1A1A1F] dark:text-zinc-300 dark:hover:bg-zinc-800'
+                              ? 'bg-blue-600 text-white shadow-xs dark:bg-lime-400 dark:text-[#070910]'
+                              : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:bg-[#0D111C] dark:text-slate-300 dark:hover:bg-slate-800'
                           }`}
                         >
                           <span className="font-semibold">{d.day}</span>
                           <span
                             className={`font-mono-tabular text-[11px] ${
-                              active ? 'text-red-100' : 'text-stone-400'
+                              active ? 'text-blue-100 dark:text-[#070910]/80' : 'text-slate-400'
                             }`}
                           >
                             {d.dateNum}
@@ -446,15 +416,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-5 divide-y divide-stone-200 rounded-2xl border border-stone-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-[#1A1A1F]">
+                <div className="mt-5 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-[#0D111C]">
                   {theatres.map((theatre) => (
                     <div key={theatre.id} className="p-4 sm:p-5">
                       <div>
-                        <h4 className="font-display text-sm font-bold text-zinc-900 sm:text-base dark:text-stone-100">
+                        <h4 className="font-display text-sm font-bold text-[#070910] sm:text-base dark:text-slate-100">
                           {theatre.name}
                         </h4>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-500 dark:text-zinc-400">
-                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                           <span>{theatre.area}</span>
                           <span aria-hidden="true">·</span>
                           <span>{theatre.amenities.slice(0, 3).join(' · ')}</span>
@@ -465,22 +435,22 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                         {theatre.showtimes.map((slot) => {
                           const statusColor =
                             slot.availability === 'available'
-                              ? 'border-emerald-600/35 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-400 dark:hover:bg-emerald-950/40'
+                              ? 'border-lime-500/60 text-lime-700 hover:bg-lime-50 dark:border-lime-400/50 dark:text-lime-400 dark:hover:bg-lime-400/10'
                               : slot.availability === 'filling-fast'
-                              ? 'border-amber-600/45 text-amber-700 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-400 dark:hover:bg-amber-950/40'
-                              : 'border-red-600/45 text-red-700 hover:bg-red-50 dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-950/40';
+                              ? 'border-blue-500/60 text-blue-700 hover:bg-blue-50 dark:border-blue-400/50 dark:text-blue-300 dark:hover:bg-blue-500/15'
+                              : 'border-amber-500/60 text-amber-700 hover:bg-amber-50 dark:border-amber-400/50 dark:text-amber-300 dark:hover:bg-amber-500/15';
 
                           return (
                             <button
                               key={slot.id}
                               type="button"
                               onClick={() => handleChooseShowtime(theatre, slot)}
-                              className={`flex flex-col items-center rounded-xl border px-4 py-2 text-center transition-all duration-150 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 ${statusColor}`}
+                              className={`flex flex-col items-center rounded-xl border px-4 py-2 text-center transition-all duration-150 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${statusColor}`}
                             >
                               <span className="font-mono-tabular text-xs font-semibold sm:text-sm">
                                 {slot.time}
                               </span>
-                              <span className="mt-0.5 text-[10px] font-medium text-stone-500 dark:text-zinc-400">
+                              <span className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
                                 {slot.format}
                               </span>
                             </button>
@@ -498,26 +468,26 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {/* Top Legend + Quick Seat Count Picker */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-4 dark:border-zinc-800">
-                <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-700 dark:text-zinc-300">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700 dark:text-slate-300">
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-4 w-4 rounded-t-md rounded-b-xs border border-emerald-600 bg-white dark:bg-zinc-900" />
+                    <span className="inline-block h-4 w-4 rounded-t-md rounded-b-xs border border-blue-500 bg-white dark:bg-[#0D111C]" />
                     Available
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-red-600 text-[10px] text-white">
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-lime-400 text-[10px] font-bold text-[#070910]">
                       ✓
                     </span>
                     Selected
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-stone-200 text-[10px] text-stone-400 dark:bg-zinc-800 dark:text-zinc-600">
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-slate-200 text-[10px] text-slate-400 dark:bg-slate-800 dark:text-slate-600">
                       ×
                     </span>
                     Sold
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-400">
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-t-md rounded-b-xs bg-blue-950/70 text-blue-300 border border-blue-500/40">
                       <Lock className="h-2.5 w-2.5" />
                     </span>
                     Locked
@@ -525,19 +495,19 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-stone-500 dark:text-zinc-400">Quick pick:</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Quick pick:</span>
                   {[1, 2, 3, 4].map((count) => (
                     <button
                       key={count}
                       type="button"
                       onClick={() => quickPickAdjacentSeats(count)}
-                      className="font-mono-tabular flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-xs font-semibold text-zinc-700 transition-colors hover:border-red-500 hover:text-red-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-stone-200 dark:hover:border-rose-500"
+                      className="font-mono-tabular flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-600 dark:border-slate-700 dark:bg-[#0D111C] dark:text-slate-200 dark:hover:border-lime-400 dark:hover:text-lime-400"
                     >
                       {count}
                     </button>
                   ))}
                   {selectedSeatIds.length > 0 && (
-                    <span className="ml-2 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <span className="ml-2 flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-lime-400">
                       <Clock className="h-3.5 w-3.5" />
                       <span className="font-mono-tabular font-semibold">{formatTimer(lockSecondsLeft)}</span>
                     </span>
@@ -546,7 +516,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
 
               {seatLimitWarning && (
-                <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-300">
                   You can select up to {MAX_SELECTABLE_SEATS} seats per booking.
                 </p>
               )}
@@ -560,17 +530,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     stroke="currentColor"
                     strokeWidth="4"
                     strokeLinecap="round"
-                    className="text-red-600/80 dark:text-rose-500/90"
+                    className="text-blue-600 dark:text-blue-500"
                   />
                   <path
                     d="M 38 30 Q 200 10 362 30"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.5"
-                    className="text-stone-300 dark:text-zinc-700"
+                    className="text-lime-500/80 dark:text-lime-400/75"
                   />
                 </svg>
-                <p className="mt-1 text-[11px] font-medium tracking-wider text-stone-400 uppercase dark:text-zinc-500">
+                <p className="mt-1 text-[11px] font-medium tracking-wider text-slate-400 uppercase dark:text-slate-500">
                   Screen this way · {selectedShowtime?.screen}
                 </p>
               </div>
@@ -585,15 +555,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     return (
                       <React.Fragment key={rowGroup.row}>
                         {showTierHeader && (
-                          <div className="flex items-center justify-between border-b border-stone-200 pt-3 pb-1 text-xs font-semibold text-stone-500 dark:border-zinc-800 dark:text-zinc-400">
+                          <div className="flex items-center justify-between border-b border-slate-200 pt-3 pb-1 text-xs font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
                             <span>{rowGroup.tier}</span>
-                            <span className="font-mono-tabular text-zinc-800 dark:text-stone-200">
+                            <span className="font-mono-tabular text-[#070910] dark:text-lime-400">
                               ₹{rowGroup.unitPrice}
                             </span>
                           </div>
                         )}
                         <div className="flex items-center justify-between gap-3 py-0.5">
-                          <span className="font-mono-tabular w-5 text-xs font-semibold text-stone-400">
+                          <span className="font-mono-tabular w-5 text-xs font-semibold text-slate-400">
                             {rowGroup.row}
                           </span>
                           <div className="flex flex-1 items-center justify-center gap-1.5">
@@ -602,16 +572,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                               const isAisle = seatIdx === 7;
 
                               let seatClasses =
-                                'border-emerald-600/55 bg-white text-zinc-700 hover:border-red-600 hover:bg-red-50 dark:border-emerald-500/50 dark:bg-zinc-900 dark:text-stone-200 dark:hover:border-rose-400 dark:hover:bg-rose-950/40';
+                                'border-blue-500/60 bg-white text-slate-700 hover:border-lime-500 hover:bg-lime-50 dark:border-blue-500/50 dark:bg-[#0D111C] dark:text-slate-200 dark:hover:border-lime-400 dark:hover:bg-lime-400/15';
                               if (isSelected) {
                                 seatClasses =
-                                  'border-red-600 bg-red-600 text-white shadow-xs scale-105 dark:border-rose-500 dark:bg-rose-600';
+                                  'border-lime-500 bg-lime-400 text-[#070910] font-bold shadow-xs scale-105 dark:border-lime-300 dark:bg-lime-400 dark:text-[#070910]';
                               } else if (seat.status === 'sold') {
                                 seatClasses =
-                                  'cursor-not-allowed border-stone-200 bg-stone-200 text-stone-400 dark:border-zinc-800 dark:bg-zinc-800/80 dark:text-zinc-600';
+                                  'cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-700';
                               } else if (seat.status === 'locked') {
                                 seatClasses =
-                                  'cursor-not-allowed border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/60 dark:text-amber-500';
+                                  'cursor-not-allowed border-blue-400/50 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-950/60 dark:text-blue-300';
                               }
 
                               return (
@@ -625,7 +595,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                                       isSelected ? 'Selected' : seat.status
                                     }`}
                                     aria-pressed={isSelected}
-                                    className={`font-mono-tabular flex h-7 w-7 items-center justify-center rounded-t-lg rounded-b-xs border border-b-2 text-[11px] font-medium transition-all duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 ${seatClasses}`}
+                                    className={`font-mono-tabular flex h-7 w-7 items-center justify-center rounded-t-lg rounded-b-xs border border-b-2 text-[11px] font-medium transition-all duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${seatClasses}`}
                                   >
                                     {seat.status === 'sold' ? (
                                       '×'
@@ -639,7 +609,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                               );
                             })}
                           </div>
-                          <span className="font-mono-tabular w-5 text-right text-xs font-semibold text-stone-400">
+                          <span className="font-mono-tabular w-5 text-right text-xs font-semibold text-slate-400">
                             {rowGroup.row}
                           </span>
                         </div>
@@ -651,61 +621,61 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
 
             {/* Right: Tactile Ticket-Stub Summary Panel */}
-            <aside className="flex w-full shrink-0 flex-col justify-between border-t border-stone-200 bg-white p-5 lg:w-88 lg:border-t-0 lg:border-l dark:border-zinc-800 dark:bg-[#1A1A1F]">
+            <aside className="flex w-full shrink-0 flex-col justify-between border-t border-slate-200 bg-white p-5 lg:w-88 lg:border-t-0 lg:border-l dark:border-slate-800 dark:bg-[#0D111C]">
               <div>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-display text-base font-bold text-zinc-900 dark:text-stone-100">
+                  <h3 className="font-display text-base font-bold text-[#070910] dark:text-slate-100">
                     Your Ticket Summary
                   </h3>
-                  <span className="font-mono-tabular text-xs font-medium text-stone-500 dark:text-zinc-400">
+                  <span className="font-mono-tabular text-xs font-medium text-blue-600 dark:text-lime-400">
                     {selectedSeatObjects.length}/{MAX_SELECTABLE_SEATS} Seats
                   </span>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-stone-200 bg-[#FAF8F5] p-3.5 dark:border-zinc-800 dark:bg-[#141418]">
+                <div className="mt-4 rounded-xl border border-slate-200 bg-[#F4F7FC] p-3.5 dark:border-slate-800 dark:bg-[#070910]">
                   {selectedSeatObjects.length > 0 ? (
                     <>
-                      <div className="flex items-center justify-between text-xs text-stone-500 dark:text-zinc-400">
+                      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                         <span>Selected Seats</span>
                         <button
                           type="button"
                           onClick={() => setSelectedSeatIds([])}
-                          className="font-medium text-red-600 hover:underline dark:text-rose-400"
+                          className="font-medium text-blue-600 hover:underline dark:text-lime-400"
                         >
                           Clear
                         </button>
                       </div>
-                      <p className="font-mono-tabular mt-1.5 text-sm font-semibold text-zinc-900 dark:text-stone-100">
+                      <p className="font-mono-tabular mt-1.5 text-sm font-semibold text-[#070910] dark:text-slate-100">
                         {selectedSeatObjects.map((s) => s.id).join(', ')}
                       </p>
-                      <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {Array.from(new Set(selectedSeatObjects.map((s) => s.tier))).join(' · ')}
                       </p>
                     </>
                   ) : (
-                    <div className="flex items-center gap-2.5 py-2 text-xs text-stone-500 dark:text-zinc-400">
-                      <Ticket className="h-4 w-4 shrink-0 text-stone-400" />
+                    <div className="flex items-center gap-2.5 py-2 text-xs text-slate-500 dark:text-slate-400">
+                      <Ticket className="h-4 w-4 shrink-0 text-blue-500" />
                       <span>Tap seats on the map or use Quick Pick above.</span>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-5 space-y-2.5 text-sm">
-                  <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                     <span>Tickets ({selectedSeatObjects.length})</span>
                     <span className="font-mono-tabular font-medium">₹{ticketSubtotal}</span>
                   </div>
-                  <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                     <span>Convenience Fee</span>
                     <span className="font-mono-tabular font-medium">₹{convenienceFee}</span>
                   </div>
-                  <div className="flex items-center justify-between text-stone-500 dark:text-zinc-400">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
                     <span>GST (18% on fee)</span>
                     <span className="font-mono-tabular">₹{gst}</span>
                   </div>
-                  <div className="flex items-center justify-between border-t border-dashed border-stone-300 pt-3 text-base font-bold text-zinc-900 dark:border-zinc-700 dark:text-stone-100">
+                  <div className="flex items-center justify-between border-t border-dashed border-slate-300 pt-3 text-base font-bold text-[#070910] dark:border-slate-700 dark:text-slate-100">
                     <span>Total Payable</span>
-                    <span className="font-mono-tabular text-lg">₹{totalAmount}</span>
+                    <span className="font-mono-tabular text-lg dark:text-lime-400">₹{totalAmount}</span>
                   </div>
                 </div>
               </div>
@@ -729,7 +699,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                       totalAmount,
                     });
                   }}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500 dark:bg-rose-600 dark:hover:bg-rose-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300 dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
                   <span>
@@ -738,7 +708,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                       : 'Select Seats to Continue'}
                   </span>
                 </button>
-                <p className="mt-2.5 text-center text-[11px] text-stone-400 dark:text-zinc-500">
+                <p className="mt-2.5 text-center text-[11px] text-slate-400 dark:text-slate-500">
                   Razorpay Demo Checkout · Instant QR M-Ticket
                 </p>
               </div>

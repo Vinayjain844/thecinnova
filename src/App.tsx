@@ -8,16 +8,31 @@ import { Footer } from './components/Footer';
 import { BookingModal, PendingCheckoutPayload } from './components/BookingModal';
 import { RazorpayDemoModal } from './components/RazorpayDemoModal';
 import { CityModal } from './components/CityModal';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import {
+  CalendarAlertItem,
+  clearUserBookings,
+  deleteUserBooking,
+  deleteUserCalendarAlert,
+  loadUserPrivateProfile,
+  saveUserBooking,
+  saveUserCalendarAlert,
+  subscribeUserBookings,
+  subscribeUserCalendarAlerts,
+  upsertUserPrivateProfile,
+} from './services/firebaseUserService';
 import { SignInModal } from './components/SignInModal';
 import { MyTicketsModal } from './components/MyTicketsModal';
+import { MentorGuideModal } from './components/MentorGuideModal';
 
 export default function App() {
-  // Light / Dark Theme state (persisted)
+  // Light / Dark Theme state (defaults to Midnight Black, persisted)
   const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = window.localStorage.getItem('cinnova_theme');
+    if (typeof window === 'undefined') return true;
+    const saved = window.localStorage.getItem('cinnova_theme_v3');
     if (saved) return saved === 'dark';
-    return false;
+    return true;
   });
 
   useEffect(() => {
@@ -27,7 +42,7 @@ export default function App() {
     } else {
       root.classList.remove('dark');
     }
-    window.localStorage.setItem('cinnova_theme', isDark ? 'dark' : 'light');
+    window.localStorage.setItem('cinnova_theme_v3', isDark ? 'dark' : 'light');
   }, [isDark]);
 
   // Navigation, search, and city state
@@ -36,37 +51,28 @@ export default function App() {
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [selectedCity, setSelectedCity] = useState('Gwalior');
 
-  // MovieGlu Catalog State (hydrates via /api/movieglu/* when configured, falls back seamlessly to local catalog)
+  // TMDB Catalog State (hydrates via /api/tmdb/* when configured, falls back seamlessly to local catalog)
   const [catalogMovies, setCatalogMovies] = useState<Movie[]>(FALLBACK_MOVIES);
+  const [upcomingAdMovies, setUpcomingAdMovies] = useState<Movie[]>([]);
   const [searchResults, setSearchResults] = useState<Movie[] | null>(null);
-  const [dataSource, setDataSource] = useState<'movieglu' | 'local'>('local');
+  const [dataSource, setDataSource] = useState<'tmdb' | 'local'>('local');
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
 
   // Modals & User state
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isMyTicketsOpen, setIsMyTicketsOpen] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    try {
-      const saved = window.localStorage.getItem('cinnova_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [isMentorGuideOpen, setIsMentorGuideOpen] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   // Booking & Seat Lock / Sold state
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [pendingCheckout, setPendingCheckout] = useState<PendingCheckoutPayload | null>(null);
   const [notifiedIds, setNotifiedIds] = useState<string[]>([]);
-  const [bookings, setBookings] = useState<BookingRecord[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('cinnova_bookings');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [firestoreCalendarAlerts, setFirestoreCalendarAlerts] = useState<CalendarAlertItem[]>([]);
+  const [pendingNotifyMovieId, setPendingNotifyMovieId] = useState<string | null>(null);
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [soldSeatMap, setSoldSeatMap] = useState<Record<string, string[]>>(() => {
     try {
       const saved = window.localStorage.getItem('cinnova_sold_seats');
@@ -77,27 +83,97 @@ export default function App() {
   });
 
   useEffect(() => {
-    window.localStorage.setItem('cinnova_bookings', JSON.stringify(bookings));
-  }, [bookings]);
-
-  useEffect(() => {
     window.localStorage.setItem('cinnova_sold_seats', JSON.stringify(soldSeatMap));
   }, [soldSeatMap]);
 
-  // Fetch category movies from backend MovieGlu proxy
+  // Listen to Firebase Auth state and sync Firestore user profile, bookings, and calendar alerts
+  useEffect(() => {
+    let unsubBookings: (() => void) | null = null;
+    let unsubAlerts: (() => void) | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
+      unsubBookings?.();
+      unsubAlerts?.();
+      unsubBookings = null;
+      unsubAlerts = null;
+
+      if (!fbUser) {
+        setUser(null);
+        setBookings([]);
+        setNotifiedIds([]);
+        setFirestoreCalendarAlerts([]);
+        setAuthReady(true);
+        return;
+      }
+
+      const provider: 'google' | 'password' = fbUser.providerData.some(
+        (p) => p.providerId === 'google.com'
+      )
+        ? 'google'
+        : 'password';
+
+      const baseProfile: UserProfile = {
+        uid: fbUser.uid,
+        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'CinNova Member',
+        email: fbUser.email || '',
+        phone: fbUser.phoneNumber || '',
+        preferredCity: selectedCity,
+        provider,
+        emailVerified: fbUser.emailVerified,
+      };
+      setUser(baseProfile);
+      setAuthReady(true);
+
+      if (fbUser.emailVerified) {
+        try {
+          const savedProfile = await loadUserPrivateProfile(fbUser.uid);
+          if (savedProfile) {
+            setUser(savedProfile);
+            if (savedProfile.preferredCity) {
+              setSelectedCity(savedProfile.preferredCity);
+            }
+          } else {
+            await upsertUserPrivateProfile(fbUser.uid, {
+              name: baseProfile.name,
+              email: baseProfile.email,
+              phone: baseProfile.phone,
+              preferredCity: selectedCity,
+              provider,
+            });
+          }
+        } catch (err) {
+          console.error('Failed to sync user profile from Firestore:', err);
+        }
+
+        unsubBookings = subscribeUserBookings(fbUser.uid, (items) => {
+          setBookings(items);
+        });
+        unsubAlerts = subscribeUserCalendarAlerts(fbUser.uid, (alerts) => {
+          setFirestoreCalendarAlerts(alerts);
+          setNotifiedIds(alerts.map((a) => a.movieId));
+        });
+      }
+    });
+
+    return () => {
+      unsubBookings?.();
+      unsubAlerts?.();
+      unsubAuth();
+    };
+  }, []);
+
+  // Fetch category movies from backend TMDB proxy
   useEffect(() => {
     let cancelled = false;
     setIsLoadingMovies(true);
 
-    fetch(
-      `/api/movieglu/movies?category=${encodeURIComponent(activeTab)}&city=${encodeURIComponent(selectedCity)}`
-    )
+    fetch(`/api/tmdb/movies?category=${encodeURIComponent(activeTab)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        if (data?.source === 'movieglu' && Array.isArray(data.movies) && data.movies.length > 0) {
+        if (data?.source === 'tmdb' && Array.isArray(data.movies) && data.movies.length > 0) {
           setCatalogMovies(data.movies);
-          setDataSource('movieglu');
+          setDataSource('tmdb');
         } else {
           setCatalogMovies(FALLBACK_MOVIES);
           setDataSource('local');
@@ -116,12 +192,32 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedCity]);
+  }, [activeTab]);
 
-  // Debounced live search via MovieGlu proxy when MovieGlu is active
+  // Fetch upcoming movies from TMDB database specifically for the advertisement section
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/tmdb/movies?category=upcoming')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.source === 'tmdb' && Array.isArray(data.movies) && data.movies.length > 0) {
+          setUpcomingAdMovies(data.movies);
+        }
+      })
+      .catch(() => {
+        // Fallback to local upcoming catalog if TMDB is unreachable
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced live search via TMDB proxy when TMDB is active
   useEffect(() => {
     const q = searchQuery.trim();
-    if (!q || dataSource !== 'movieglu') {
+    if (!q || dataSource !== 'tmdb') {
       setSearchResults(null);
       return;
     }
@@ -129,12 +225,10 @@ export default function App() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setIsLoadingMovies(true);
-      fetch(
-        `/api/movieglu/search?q=${encodeURIComponent(q)}&city=${encodeURIComponent(selectedCity)}`
-      )
+      fetch(`/api/tmdb/search?q=${encodeURIComponent(q)}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (!cancelled && data?.source === 'movieglu' && Array.isArray(data.movies)) {
+          if (!cancelled && data?.source === 'tmdb' && Array.isArray(data.movies)) {
             setSearchResults(data.movies);
           }
         })
@@ -150,22 +244,72 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [searchQuery, dataSource, selectedCity]);
+  }, [searchQuery, dataSource]);
 
-  const handleSignIn = (profile: UserProfile) => {
-    setUser(profile);
-    window.localStorage.setItem('cinnova_user', JSON.stringify(profile));
-  };
-
-  const handleSignOut = () => {
-    setUser(null);
-    window.localStorage.removeItem('cinnova_user');
-  };
-
-  const handleToggleNotify = (movieId: string) => {
-    setNotifiedIds((prev) =>
-      prev.includes(movieId) ? prev.filter((id) => id !== movieId) : [...prev, movieId]
+  const findMovieById = (movieId: string): Movie | undefined => {
+    return (
+      upcomingAdMovies.find((m) => m.id === movieId) ||
+      catalogMovies.find((m) => m.id === movieId) ||
+      FALLBACK_MOVIES.find((m) => m.id === movieId)
     );
+  };
+
+  const handleAuthComplete = (profile: UserProfile) => {
+    setUser(profile);
+    if (pendingNotifyMovieId) {
+      const movieIdToSave = pendingNotifyMovieId;
+      setPendingNotifyMovieId(null);
+      setNotifiedIds((prev) => (prev.includes(movieIdToSave) ? prev : [...prev, movieIdToSave]));
+      if (profile.uid && profile.emailVerified) {
+        const movieObj = findMovieById(movieIdToSave);
+        if (movieObj) {
+          saveUserCalendarAlert(profile.uid, movieObj).catch((err) => {
+            console.error('Failed to persist pending calendar alert:', err);
+          });
+        }
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    setIsMyTicketsOpen(false);
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Firebase signOut failed:', err);
+    }
+    setUser(null);
+    setBookings([]);
+    setNotifiedIds([]);
+    setFirestoreCalendarAlerts([]);
+  };
+
+  const handleToggleNotify = async (movieId: string) => {
+    if (!user || !authReady) {
+      setPendingNotifyMovieId(movieId);
+      setIsSignInOpen(true);
+      return;
+    }
+
+    const exists = notifiedIds.includes(movieId);
+    setNotifiedIds((prev) =>
+      exists ? prev.filter((id) => id !== movieId) : [...prev, movieId]
+    );
+
+    if (user.uid && user.emailVerified) {
+      try {
+        if (exists) {
+          await deleteUserCalendarAlert(user.uid, movieId);
+        } else {
+          const movieObj = findMovieById(movieId);
+          if (movieObj) {
+            await saveUserCalendarAlert(user.uid, movieObj);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync calendar alert to Firestore:', err);
+      }
+    }
   };
 
   // Dynamic genre chips extracted from active movie list
@@ -176,7 +320,7 @@ export default function App() {
     return ['All', ...Array.from(genreSet)];
   }, [catalogMovies, searchResults]);
 
-  // Reset selected genre if it doesn't exist in newly loaded MovieGlu category
+  // Reset selected genre if it doesn't exist in newly loaded TMDB category
   useEffect(() => {
     if (selectedGenre !== 'All' && !availableGenres.includes(selectedGenre)) {
       setSelectedGenre('All');
@@ -221,43 +365,43 @@ export default function App() {
     return list;
   }, [catalogMovies, searchResults, dataSource, activeTab, selectedGenre, searchQuery]);
 
-  // Dynamic Floating Ad Slides: enrich with live MovieGlu backdrop highlights when available
+  // Dynamic Floating Ad Slides: showcase upcoming movies strictly from the TMDB database
   const activeAdSlides: AdSlide[] = useMemo(() => {
-    if (dataSource === 'movieglu' && catalogMovies.length > 0) {
-      const backdropMovies = catalogMovies.filter((m) => m.backdropImage).slice(0, 3);
-      if (backdropMovies.length >= 2) {
-        return backdropMovies.map((m, idx) => ({
-          id: `mg-ad-${m.id}`,
-          kicker:
-            idx === 0
-              ? `Featured in ${selectedCity} · MovieGlu Live`
-              : idx === 1
-              ? 'Trending in Multiplexes'
-              : 'CinNova Luxe Screening',
-          title: m.title,
-          subtitle: m.synopsis.slice(0, 130) + (m.synopsis.length > 130 ? '...' : ''),
-          ctaLabel: m.status === 'upcoming' ? 'Preview Release' : 'Book Seats Now',
-          image: m.backdropImage!,
-          movieId: m.id,
-          promoCode: idx === 2 ? 'CINNOVA20' : undefined,
-        }));
-      }
+    if (upcomingAdMovies.length > 0) {
+      const spotlightPool = upcomingAdMovies.filter(
+        (m) => Boolean(m.backdropImage && m.synopsis && m.synopsis.trim().length > 0)
+      );
+      const chosen = (spotlightPool.length > 0 ? spotlightPool : upcomingAdMovies).slice(0, 5);
+      return chosen.map((m) => ({
+        id: `tmdb-upcoming-ad-${m.id}`,
+        kicker: 'Upcoming Movie Spotlight',
+        title: m.title,
+        subtitle: m.synopsis,
+        ctaLabel: 'View Details & Alerts',
+        image: m.backdropImage || m.posterImage || AD_SLIDES[0].image,
+        movieId: m.id,
+        movie: m,
+      }));
     }
     return AD_SLIDES;
-  }, [dataSource, catalogMovies, selectedCity]);
+  }, [upcomingAdMovies]);
 
   const handleSelectAdSlide = (slide: AdSlide) => {
-    if (slide.movieId) {
-      const found =
-        catalogMovies.find((m) => m.id === slide.movieId) ||
-        FALLBACK_MOVIES.find((m) => m.id === slide.movieId) ||
-        catalogMovies[0];
-      if (found) setSelectedMovie(found);
-    }
+    const found =
+      upcomingAdMovies.find((m) => m.id === slide.movieId) ||
+      catalogMovies.find((m) => m.id === slide.movieId) ||
+      slide.movie;
+    if (found) setSelectedMovie(found);
   };
 
   const handlePaymentSuccess = (booking: BookingRecord) => {
     setBookings((prev) => [booking, ...prev]);
+
+    if (user?.uid && user.emailVerified) {
+      saveUserBooking(user.uid, booking).catch((err) => {
+        console.error('Failed to save booking to Firestore:', err);
+      });
+    }
 
     if (pendingCheckout) {
       const dateOptionsMap: Record<string, string> = {
@@ -282,8 +426,79 @@ export default function App() {
     setSelectedMovie(null);
   };
 
+  const handleRefreshTickets = async () => {
+    if (user?.uid && user.emailVerified) {
+      try {
+        const refreshed = await loadUserPrivateProfile(user.uid);
+        if (refreshed) setUser(refreshed);
+      } catch (err) {
+        console.error('Refresh error:', err);
+      }
+    }
+  };
+
+  const handleClearBookings = async () => {
+    const ids = bookings.map((b) => b.bookingId);
+    setBookings([]);
+    setSoldSeatMap({});
+    window.localStorage.removeItem('cinnova_sold_seats');
+    if (user?.uid && user.emailVerified && ids.length > 0) {
+      try {
+        await clearUserBookings(user.uid, ids);
+      } catch (err) {
+        console.error('Failed to clear bookings in Firestore:', err);
+      }
+    }
+  };
+
+  const handleRemoveBooking = async (bookingId: string) => {
+    setBookings((prev) => prev.filter((b) => b.bookingId !== bookingId));
+    if (user?.uid && user.emailVerified) {
+      try {
+        await deleteUserBooking(user.uid, bookingId);
+      } catch (err) {
+        console.error('Failed to remove booking in Firestore:', err);
+      }
+    }
+  };
+
+  const calendarMovies = useMemo(() => {
+    if (!user || notifiedIds.length === 0) return [];
+    const pool = [...upcomingAdMovies, ...catalogMovies, ...FALLBACK_MOVIES];
+    const byId = new Map<string, Movie>();
+    pool.forEach((m) => {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    });
+    return notifiedIds
+      .map((id) => {
+        const matched = byId.get(id);
+        if (matched) return matched;
+        const alert = firestoreCalendarAlerts.find((a) => a.movieId === id);
+        if (!alert) return null;
+        return {
+          id: alert.movieId,
+          title: alert.title,
+          tagline: 'Upcoming theatrical release',
+          genres: alert.genres,
+          language: alert.language,
+          formats: ['2D'],
+          duration: 'TBA',
+          certification: 'UA 13+',
+          rating: 8.1,
+          votes: 'Interested',
+          status: 'upcoming' as const,
+          releaseDate: alert.releaseDate,
+          director: 'Theatrical Feature',
+          cast: ['Ensemble Cast'],
+          synopsis: 'Saved in your CinNova Firebase Release Calendar.',
+          posterImage: alert.posterImage,
+        };
+      })
+      .filter((m): m is Movie => Boolean(m));
+  }, [user, notifiedIds, upcomingAdMovies, catalogMovies, firestoreCalendarAlerts]);
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#FAF8F5] text-zinc-900 transition-colors duration-200 dark:bg-[#111114] dark:text-stone-100">
+    <div className="flex min-h-screen flex-col bg-[#F4F7FC] text-[#070910] transition-colors duration-200 dark:bg-[#070910] dark:text-slate-100">
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -297,12 +512,18 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         bookingsCount={bookings.length}
-        onOpenMyTickets={() => setIsMyTicketsOpen(true)}
+        onOpenMyBookings={() => {
+          if (user) setIsMyTicketsOpen(true);
+        }}
+        onOpenMentorGuide={() => setIsMentorGuideOpen(true)}
       />
 
       <main className="flex-1">
         <FloatingAdCarousel
           slides={activeAdSlides}
+          isSignedIn={Boolean(user)}
+          notifiedIds={user ? notifiedIds : []}
+          onToggleNotify={handleToggleNotify}
           onSelectSlide={handleSelectAdSlide}
         />
 
@@ -317,7 +538,7 @@ export default function App() {
           dataSource={dataSource}
           onSelectGenre={setSelectedGenre}
           onSelectMovie={setSelectedMovie}
-          notifiedIds={notifiedIds}
+          notifiedIds={user ? notifiedIds : []}
           onToggleNotify={handleToggleNotify}
           onResetFilters={() => {
             setActiveTab('all');
@@ -328,8 +549,12 @@ export default function App() {
       </main>
 
       <Footer
+        isSignedIn={Boolean(user)}
         onSelectTab={setActiveTab}
-        onOpenMyTickets={() => setIsMyTicketsOpen(true)}
+        onOpenMyBookings={() => {
+          if (user) setIsMyTicketsOpen(true);
+        }}
+        onOpenMentorGuide={() => setIsMentorGuideOpen(true)}
         onOpenCityModal={() => setIsCityModalOpen(true)}
       />
 
@@ -337,7 +562,7 @@ export default function App() {
         movie={selectedMovie}
         city={selectedCity}
         soldSeatMap={soldSeatMap}
-        isNotified={selectedMovie ? notifiedIds.includes(selectedMovie.id) : false}
+        isNotified={Boolean(user && selectedMovie && notifiedIds.includes(selectedMovie.id))}
         onToggleNotify={handleToggleNotify}
         onClose={() => setSelectedMovie(null)}
         onProceedToPayment={(payload) => setPendingCheckout(payload)}
@@ -353,20 +578,52 @@ export default function App() {
       <CityModal
         isOpen={isCityModalOpen}
         selectedCity={selectedCity}
-        onSelectCity={setSelectedCity}
+        onSelectCity={(city) => {
+          setSelectedCity(city);
+          if (user?.uid && user.emailVerified) {
+            upsertUserPrivateProfile(user.uid, {
+              name: user.name,
+              email: user.email,
+              phone: user.phone,
+              preferredCity: city,
+              provider: user.provider || 'google',
+            }).catch(() => {});
+          }
+        }}
         onClose={() => setIsCityModalOpen(false)}
       />
 
       <SignInModal
         isOpen={isSignInOpen}
-        onClose={() => setIsSignInOpen(false)}
-        onSignIn={handleSignIn}
+        promptMessage={
+          pendingNotifyMovieId
+            ? 'Sign in to add this movie release to your calendar'
+            : undefined
+        }
+        selectedCity={selectedCity}
+        onClose={() => {
+          setIsSignInOpen(false);
+          setPendingNotifyMovieId(null);
+        }}
+        onAuthComplete={handleAuthComplete}
       />
 
       <MyTicketsModal
-        isOpen={isMyTicketsOpen}
+        isOpen={Boolean(user) && isMyTicketsOpen}
         bookings={bookings}
+        calendarMovies={calendarMovies}
+        isSignedIn={Boolean(user)}
+        onRefresh={handleRefreshTickets}
+        onClearBookings={handleClearBookings}
+        onRemoveBooking={handleRemoveBooking}
+        onRemoveCalendarMovie={handleToggleNotify}
+        onSelectMovie={setSelectedMovie}
         onClose={() => setIsMyTicketsOpen(false)}
+      />
+
+      <MentorGuideModal
+        isOpen={isMentorGuideOpen}
+        onClose={() => setIsMentorGuideOpen(false)}
       />
     </div>
   );

@@ -11,37 +11,6 @@ export const CITIES: string[] = [
   'Kolkata',
 ];
 
-export const AD_SLIDES: AdSlide[] = [
-  {
-    id: 'ad-imax-aurora',
-    kicker: 'IMAX 70mm Exclusive Premiere',
-    title: 'Journey to Aurora',
-    subtitle: 'Experience the deep-space odyssey in towering IMAX laser projection with spatial sound.',
-    ctaLabel: 'Book IMAX Seats',
-    image: '/src/assets/images/ad_banner_imax_odyssey_1795627588905.jpg',
-    movieId: 'journey-to-aurora',
-  },
-  {
-    id: 'ad-noir-premiere',
-    kicker: 'Critics Choice Noir Thriller',
-    title: 'Nocturne Alibi',
-    subtitle: 'Midnight advance screenings now open across major multiplexes. Reserve front-center rows.',
-    ctaLabel: 'Explore Showtimes',
-    image: '/src/assets/images/ad_banner_noir_premiere_1795627588938.jpg',
-    movieId: 'nocturne-alibi',
-  },
-  {
-    id: 'ad-luxe-pass',
-    kicker: 'CinNova Luxe Weekend Offer',
-    title: 'Echoes of Odyssey in Velvet Recliners',
-    subtitle: 'Enjoy 20% instant savings on Royal Recliner bookings with Razorpay UPI test checkout.',
-    ctaLabel: 'Book Recliner',
-    image: '/src/assets/images/ad_banner_cinema_pass_1795627588782.jpg',
-    movieId: 'echoes-of-odyssey',
-    promoCode: 'CINNOVA20',
-  },
-];
-
 export const MOVIES: Movie[] = [
   {
     id: 'journey-to-aurora',
@@ -741,6 +710,25 @@ export const MOVIES: Movie[] = [
     },
   },
 ];
+
+const AD_FALLBACK_BACKDROPS = [
+  '/src/assets/images/ad_banner_imax_odyssey_1795627588905.jpg',
+  '/src/assets/images/ad_banner_noir_premiere_1795627588938.jpg',
+  '/src/assets/images/ad_banner_cinema_pass_1795627588782.jpg',
+];
+
+export const AD_SLIDES: AdSlide[] = MOVIES.filter((m) => m.status === 'upcoming')
+  .slice(0, 5)
+  .map((m, idx) => ({
+    id: `upcoming-ad-${m.id}`,
+    kicker: `Upcoming Release · ${m.releaseDate}`,
+    title: m.title,
+    subtitle: m.synopsis,
+    ctaLabel: 'View Movie Details',
+    image: m.backdropImage || AD_FALLBACK_BACKDROPS[idx % AD_FALLBACK_BACKDROPS.length],
+    movieId: m.id,
+    movie: m,
+  }));
 
 export function getTheatresForCity(city: string): Theatre[] {
   const cityPrefixMap: Record<string, { area1: string; area2: string; area3: string }> = {

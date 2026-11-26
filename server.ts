@@ -10,156 +10,104 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
-const MOVIEGLU_BASE = 'https://api-gate2.movieglu.com';
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const TMDB_IMG_W500 = 'https://image.tmdb.org/t/p/w500';
+const TMDB_IMG_ORIG = 'https://image.tmdb.org/t/p/original';
 
-const CITY_COORDS: Record<string, string> = {
-  Gwalior: '26.2183;78.1828',
-  Mumbai: '19.0760;72.8777',
-  'Delhi-NCR': '28.6139;77.2090',
-  Bengaluru: '12.9716;77.5946',
-  Hyderabad: '17.3850;78.4867',
-  Pune: '18.5204;73.8567',
-  Chennai: '13.0827;80.2707',
-  Kolkata: '22.5726;88.3639',
-};
-
-interface MovieGluImageEntry {
-  film_image?: string;
-}
-
-interface MovieGluFilmRaw {
-  film_id: number;
-  imdb_title_id?: string;
-  film_name?: string;
-  synopsis_long?: string;
-  duration_mins?: number;
-  release_dates?: { release_date?: string; notes?: string }[];
-  age_rating?: { rating?: string; age_advisory?: string }[];
-  genres?: { genre_id?: number; genre_name?: string }[];
-  cast?: { cast_name?: string }[];
-  directors?: { director_name?: string }[];
-  film_trailer?: string;
-  images?: {
-    poster?: Record<string, { medium?: string | MovieGluImageEntry; large?: string | MovieGluImageEntry }>;
-    still?: Record<string, { medium?: string | MovieGluImageEntry; large?: string | MovieGluImageEntry }>;
-    [key: string]: unknown;
+interface TmdbMovieRaw {
+  id: number;
+  title?: string;
+  original_title?: string;
+  overview?: string;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  vote_average?: number;
+  vote_count?: number;
+  release_date?: string;
+  genre_ids?: number[];
+  original_language?: string;
+  adult?: boolean;
+  runtime?: number;
+  tagline?: string;
+  genres?: { id: number; name: string }[];
+  credits?: {
+    cast?: { name: string }[];
+    crew?: { name: string; job: string }[];
   };
 }
 
-interface MovieGluCinemaRaw {
-  cinema_id: number;
-  cinema_name: string;
-  address?: string;
-  address2?: string;
-  city?: string;
-  distance?: number;
-  showings?: Record<
-    string,
-    {
-      film_id?: number;
-      times?: { start_time?: string; end_time?: string }[];
-    }
-  >;
+let cachedGenres: { map: Record<number, string>; fetchedAt: number } | null = null;
+
+function getTmdbCredentials() {
+  const token = process.env.TMDB_READ_ACCESS_TOKEN?.trim() || '';
+  const apiKey = process.env.TMDB_API_KEY?.trim() || '';
+  return { token, apiKey, configured: Boolean(token || apiKey) };
 }
 
-function getMovieGluCredentials() {
-  const client = process.env.MOVIEGLU_CLIENT?.trim() || '';
-  const apiKey = process.env.MOVIEGLU_API_KEY?.trim() || '';
-  const rawAuth = process.env.MOVIEGLU_AUTHORIZATION?.trim() || '';
-  const territory = process.env.MOVIEGLU_TERRITORY?.trim() || 'IN';
-  const apiVersion = process.env.MOVIEGLU_API_VERSION?.trim() || 'v200';
-
-  const authorization = rawAuth
-    ? rawAuth.toLowerCase().startsWith('basic ')
-      ? rawAuth
-      : `Basic ${rawAuth}`
-    : '';
-
-  const configured = Boolean(client && apiKey && authorization);
-  return { client, apiKey, authorization, territory, apiVersion, configured };
-}
-
-function getGeolocationForCity(city?: string): string {
-  if (!city) return CITY_COORDS.Gwalior;
-  return CITY_COORDS[city] || CITY_COORDS.Gwalior;
-}
-
-async function fetchFromMovieGlu<T>(
-  endpoint: string,
-  params: Record<string, string> = {},
-  city?: string
-): Promise<T | null> {
-  const creds = getMovieGluCredentials();
-  if (!creds.configured) {
-    throw new Error('MovieGlu credentials are not configured on the server.');
+async function fetchFromTmdb<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
+  const { token, apiKey } = getTmdbCredentials();
+  if (!token && !apiKey) {
+    throw new Error('TMDB credentials are not configured on the server.');
   }
 
-  const url = new URL(`${MOVIEGLU_BASE}${endpoint}`);
+  const url = new URL(`${TMDB_BASE}${endpoint}`);
   Object.entries(params).forEach(([key, value]) => {
     url.searchParams.set(key, value);
   });
 
-  const resp = await fetch(url.toString(), {
-    headers: {
-      Accept: 'application/json',
-      client: creds.client,
-      'x-api-key': creds.apiKey,
-      authorization: creds.authorization,
-      territory: creds.territory,
-      'api-version': creds.apiVersion,
-      'device-datetime': new Date().toISOString(),
-      geolocation: getGeolocationForCity(city),
-    },
-  });
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
 
-  if (resp.status === 204) {
-    return null;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else if (apiKey) {
+    url.searchParams.set('api_key', apiKey);
   }
 
+  const resp = await fetch(url.toString(), { headers });
   if (!resp.ok) {
-    throw new Error(`MovieGlu responded with status ${resp.status}`);
+    throw new Error(`TMDB responded with status ${resp.status}`);
   }
-
   return (await resp.json()) as T;
 }
 
-function extractImageUrl(
-  images: MovieGluFilmRaw['images'],
-  kind: 'poster' | 'still'
-): string | undefined {
-  if (!images) return undefined;
-
-  const unwrap = (entry?: string | MovieGluImageEntry): string | undefined => {
-    if (!entry) return undefined;
-    if (typeof entry === 'string') return entry;
-    return entry.film_image;
-  };
-
-  // Standard v200 shape: images.poster["1"].medium.film_image or string
-  const directGroup = images[kind];
-  if (directGroup && typeof directGroup === 'object') {
-    const firstKey = Object.keys(directGroup)[0];
-    if (firstKey) {
-      const slot = directGroup[firstKey];
-      const candidate = unwrap(slot?.large) || unwrap(slot?.medium);
-      if (candidate) return candidate;
-    }
+async function getGenreMap(): Promise<Record<number, string>> {
+  const now = Date.now();
+  if (cachedGenres && now - cachedGenres.fetchedAt < 3600_000) {
+    return cachedGenres.map;
   }
 
-  // Alternate numbered map shape: images["1"].poster["1"].medium
-  const numericWrapper = images['1'] as
-    | Record<string, Record<string, { medium?: string | MovieGluImageEntry; large?: string | MovieGluImageEntry }>>
-    | undefined;
-  if (numericWrapper && numericWrapper[kind]) {
-    const firstSubKey = Object.keys(numericWrapper[kind])[0];
-    if (firstSubKey) {
-      const slot = numericWrapper[kind][firstSubKey];
-      const candidate = unwrap(slot?.large) || unwrap(slot?.medium);
-      if (candidate) return candidate;
-    }
+  const data = await fetchFromTmdb<{ genres: { id: number; name: string }[] }>(
+    '/genre/movie/list',
+    { language: 'en-US' }
+  );
+  const map: Record<number, string> = {};
+  for (const g of data.genres || []) {
+    map[g.id] = g.name;
   }
+  cachedGenres = { map, fetchedAt: now };
+  return map;
+}
 
-  return undefined;
+const LANG_NAMES: Record<string, string> = {
+  en: 'English',
+  hi: 'Hindi',
+  ta: 'Tamil',
+  te: 'Telugu',
+  ml: 'Malayalam',
+  kn: 'Kannada',
+  ja: 'Japanese',
+  ko: 'Korean',
+  fr: 'French',
+  es: 'Spanish',
+};
+
+function formatVoteCount(count: number): string {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return String(count);
 }
 
 function formatReleaseDate(dateStr?: string): string {
@@ -173,67 +121,48 @@ function formatReleaseDate(dateStr?: string): string {
   });
 }
 
-function formatDuration(mins?: number): string {
-  const total = mins && mins > 0 ? mins : 132;
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${h}h ${String(m).padStart(2, '0')}m`;
-}
-
-function normalizeMovieGluFilm(
-  raw: MovieGluFilmRaw,
+function normalizeTmdbMovie(
+  raw: TmdbMovieRaw,
+  genreMap: Record<number, string>,
   forcedStatus?: 'now-showing' | 'upcoming'
 ) {
-  const releaseRaw = raw.release_dates?.[0]?.release_date;
-  const releaseMs = releaseRaw ? new Date(releaseRaw).getTime() : 0;
-  const inferredStatus: 'now-showing' | 'upcoming' =
-    forcedStatus || (releaseMs > Date.now() ? 'upcoming' : 'now-showing');
-
   const genreNames =
-    raw.genres?.map((g) => g.genre_name).filter((g): g is string => Boolean(g)) || [];
-  const castNames =
-    raw.cast?.map((c) => c.cast_name).filter((c): c is string => Boolean(c)).slice(0, 3) || [];
-  const directorName =
-    raw.directors?.find((d) => Boolean(d.director_name))?.director_name || 'Theatrical Feature';
-  const cert = raw.age_rating?.[0]?.rating || 'UA 13+';
+    raw.genres?.map((g) => g.name) ||
+    (raw.genre_ids || []).map((id) => genreMap[id]).filter(Boolean);
 
-  // Deterministic friendly score when MovieGlu feed omits user ratings
-  const syntheticScore = Number((7.8 + ((raw.film_id % 17) * 0.1)).toFixed(1));
-  const syntheticVotes = `${(24 + (raw.film_id % 140)).toFixed(1)}K`;
+  const releaseDateMs = raw.release_date ? new Date(raw.release_date).getTime() : 0;
+  const inferredStatus: 'now-showing' | 'upcoming' =
+    forcedStatus || (releaseDateMs > Date.now() ? 'upcoming' : 'now-showing');
+
+  const director =
+    raw.credits?.crew?.find((c) => c.job === 'Director')?.name || 'Theatrical Feature';
+  const cast = raw.credits?.cast?.slice(0, 3).map((c) => c.name) || ['Ensemble Cast'];
+  const runtimeMins = raw.runtime || 128;
+  const hours = Math.floor(runtimeMins / 60);
+  const mins = runtimeMins % 60;
 
   return {
-    id: `mg-${raw.film_id}`,
-    moviegluId: raw.film_id,
-    title: raw.film_name || 'Untitled Feature',
-    tagline: raw.age_rating?.[0]?.age_advisory || 'Experience it in theatres near you.',
-    genres: genreNames.length > 0 ? genreNames.slice(0, 2) : ['Drama', 'Feature'],
-    language: 'English / Hindi',
+    id: `tmdb-${raw.id}`,
+    tmdbId: raw.id,
+    title: raw.title || raw.original_title || 'Untitled Feature',
+    tagline: raw.tagline || 'In cinemas & laser multiplexes.',
+    genres: genreNames.length > 0 ? genreNames.slice(0, 2) : ['Drama'],
+    language:
+      LANG_NAMES[raw.original_language || 'en'] ||
+      (raw.original_language || 'English').toUpperCase(),
     formats: ['2D', 'Dolby Atmos', 'IMAX 2D'],
-    duration: formatDuration(raw.duration_mins),
-    certification: cert,
-    rating: Math.min(9.5, syntheticScore),
-    votes: syntheticVotes,
+    duration: `${hours}h ${String(mins).padStart(2, '0')}m`,
+    certification: raw.adult ? 'A' : 'UA 13+',
+    rating: raw.vote_average ? Number(raw.vote_average.toFixed(1)) : 8.1,
+    votes: formatVoteCount(raw.vote_count || 1240),
     status: inferredStatus,
-    releaseDate: formatReleaseDate(releaseRaw),
-    director: directorName,
-    cast: castNames.length > 0 ? castNames : ['Ensemble Cast'],
-    synopsis:
-      raw.synopsis_long || 'Book tickets now for upcoming multiplex showtimes.',
-    posterImage: extractImageUrl(raw.images, 'poster'),
-    backdropImage: extractImageUrl(raw.images, 'still'),
-    trailerUrl: raw.film_trailer,
+    releaseDate: formatReleaseDate(raw.release_date),
+    director,
+    cast,
+    synopsis: raw.overview || 'Experience this feature presentation on the big screen.',
+    posterImage: raw.poster_path ? `${TMDB_IMG_W500}${raw.poster_path}` : undefined,
+    backdropImage: raw.backdrop_path ? `${TMDB_IMG_ORIG}${raw.backdrop_path}` : undefined,
   };
-}
-
-function formatShowtimeLabel(time24?: string): string {
-  if (!time24) return '07:30 PM';
-  const [hhStr, mmStr] = time24.split(':');
-  const hh = Number(hhStr);
-  const mm = Number(mmStr || 0);
-  if (Number.isNaN(hh)) return time24;
-  const suffix = hh >= 12 ? 'PM' : 'AM';
-  const h12 = hh % 12 === 0 ? 12 : hh % 12;
-  return `${String(h12).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${suffix}`;
 }
 
 async function startServer() {
@@ -241,194 +170,161 @@ async function startServer() {
   app.use(express.json());
 
   app.get('/api/health', (_req: Request, res: Response) => {
-    const { configured } = getMovieGluCredentials();
-    res.json({ ok: true, provider: 'movieglu', moviegluConfigured: configured });
+    const { configured } = getTmdbCredentials();
+    res.json({ ok: true, provider: 'tmdb', tmdbConfigured: configured });
   });
 
-  app.get('/api/movieglu/movies', async (req: Request, res: Response) => {
-    const { configured } = getMovieGluCredentials();
+  app.get('/api/tmdb/movies', async (req: Request, res: Response) => {
+    const { configured } = getTmdbCredentials();
     if (!configured) {
-      return res.json({ source: 'local', moviegluConfigured: false, movies: [] });
+      return res.json({ source: 'local', tmdbConfigured: false, movies: [] });
     }
 
     const category = String(req.query.category || 'all');
-    const city = String(req.query.city || 'Gwalior');
-
     try {
+      const genreMap = await getGenreMap();
+
+      if (category === 'top-rated') {
+        const [p1, p2] = await Promise.all([
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/top_rated', { page: '1', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/top_rated', { page: '2', region: 'IN' }),
+        ]);
+        const seen = new Set<number>();
+        const movies = [...(p1.results || []), ...(p2.results || [])]
+          .filter((m) => {
+            if (!m.poster_path || seen.has(m.id)) return false;
+            seen.add(m.id);
+            return true;
+          })
+          .slice(0, 30)
+          .map((m) => normalizeTmdbMovie(m, genreMap, 'now-showing'));
+        return res.json({ source: 'tmdb', tmdbConfigured: true, movies });
+      }
+
       if (category === 'upcoming') {
-        const data = await fetchFromMovieGlu<{ films?: MovieGluFilmRaw[] }>(
-          '/filmsComingSoon/',
-          { n: '20' },
-          city
+        const [in1, in2, global1] = await Promise.all([
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '1', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '2', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '1', language: 'en-US' }),
+        ]);
+
+        const seen = new Set<number>();
+        const todayCutoffMs = Date.now() - 86400_000;
+        const upcomingPool = [...(in1.results || []), ...(in2.results || []), ...(global1.results || [])]
+          .filter((m) => {
+            if (!m.poster_path || seen.has(m.id)) return false;
+            const relMs = m.release_date ? new Date(m.release_date).getTime() : 0;
+            if (relMs && relMs < todayCutoffMs) return false;
+            seen.add(m.id);
+            return true;
+          })
+          .slice(0, 24);
+
+        // Enrich the top featured upcoming movies (with backdrop + overview) with full TMDB details & credits
+        const featuredIds = upcomingPool
+          .filter((m) => Boolean(m.backdrop_path && m.overview && m.overview.trim().length > 20))
+          .slice(0, 6)
+          .map((m) => m.id);
+
+        const detailResults = await Promise.allSettled(
+          featuredIds.map((id) =>
+            fetchFromTmdb<TmdbMovieRaw>(`/movie/${id}`, { append_to_response: 'credits' })
+          )
         );
-        const movies = (data?.films || [])
-          .filter((f) => extractImageUrl(f.images, 'poster'))
-          .map((f) => normalizeMovieGluFilm(f, 'upcoming'));
-        return res.json({ source: 'movieglu', moviegluConfigured: true, movies });
+        const enrichedMap = new Map<number, TmdbMovieRaw>();
+        detailResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value?.id) {
+            enrichedMap.set(result.value.id, result.value);
+          }
+        });
+
+        const movies = upcomingPool
+          .slice(0, 20)
+          .map((m) => normalizeTmdbMovie(enrichedMap.get(m.id) || m, genreMap, 'upcoming'));
+        return res.json({ source: 'tmdb', tmdbConfigured: true, movies });
       }
 
-      if (category === 'now-showing' || category === 'top-rated') {
-        const data = await fetchFromMovieGlu<{ films?: MovieGluFilmRaw[] }>(
-          '/filmsNowShowing/',
-          { n: '25' },
-          city
-        );
-        let movies = (data?.films || [])
-          .filter((f) => extractImageUrl(f.images, 'poster'))
-          .map((f) => normalizeMovieGluFilm(f, 'now-showing'));
-        if (category === 'top-rated') {
-          movies = [...movies].sort((a, b) => b.rating - a.rating);
+      if (category === 'now-showing' || category === 'all') {
+        const [in1, in2, global1, global2] = await Promise.all([
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '1', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '2', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '1', language: 'en-US' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '2', language: 'en-US' }),
+        ]);
+
+        const seen = new Set<number>();
+        const pool: TmdbMovieRaw[] = [];
+        const cutoffMs = Date.now() + 2 * 86400_000;
+        const minRecentMs = Date.now() - 180 * 86400_000;
+
+        for (const m of [...(in1.results || []), ...(in2.results || []), ...(global1.results || []), ...(global2.results || [])]) {
+          if (!m.poster_path || seen.has(m.id)) continue;
+          const relMs = m.release_date ? new Date(m.release_date).getTime() : 0;
+          if (!relMs || relMs > cutoffMs || relMs < minRecentMs) continue;
+          seen.add(m.id);
+          pool.push(m);
         }
-        return res.json({ source: 'movieglu', moviegluConfigured: true, movies });
+
+        // Sort newest theatrical releases first
+        pool.sort((a, b) => {
+          const da = a.release_date ? new Date(a.release_date).getTime() : 0;
+          const db = b.release_date ? new Date(b.release_date).getTime() : 0;
+          if (db !== da) return db - da;
+          return (b.vote_count || 0) - (a.vote_count || 0);
+        });
+
+        const movies = pool
+          .slice(0, 30)
+          .map((m) => normalizeTmdbMovie(m, genreMap, 'now-showing'));
+        return res.json({ source: 'tmdb', tmdbConfigured: true, movies });
       }
 
-      // Default 'all': combine filmsNowShowing + filmsComingSoon up to 30 films
-      const [nowData, soonData] = await Promise.all([
-        fetchFromMovieGlu<{ films?: MovieGluFilmRaw[] }>('/filmsNowShowing/', { n: '22' }, city),
-        fetchFromMovieGlu<{ films?: MovieGluFilmRaw[] }>('/filmsComingSoon/', { n: '12' }, city),
-      ]);
-
-      const seen = new Set<number>();
-      const combined: ReturnType<typeof normalizeMovieGluFilm>[] = [];
-
-      for (const f of nowData?.films || []) {
-        if (!seen.has(f.film_id) && extractImageUrl(f.images, 'poster')) {
-          seen.add(f.film_id);
-          combined.push(normalizeMovieGluFilm(f, 'now-showing'));
-        }
-      }
-      for (const f of soonData?.films || []) {
-        if (!seen.has(f.film_id) && extractImageUrl(f.images, 'poster') && combined.length < 30) {
-          seen.add(f.film_id);
-          combined.push(normalizeMovieGluFilm(f, 'upcoming'));
-        }
-      }
-
-      return res.json({
-        source: 'movieglu',
-        moviegluConfigured: true,
-        movies: combined.slice(0, 30),
-      });
+      return res.json({ source: 'local', tmdbConfigured: true, movies: [] });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to reach MovieGlu';
-      return res.status(502).json({
-        source: 'local',
-        moviegluConfigured: true,
-        error: message,
-        movies: [],
-      });
+      const message = err instanceof Error ? err.message : 'Unable to reach TMDB';
+      return res.status(502).json({ source: 'local', tmdbConfigured: true, error: message, movies: [] });
     }
   });
 
-  app.get('/api/movieglu/search', async (req: Request, res: Response) => {
-    const { configured } = getMovieGluCredentials();
+  app.get('/api/tmdb/search', async (req: Request, res: Response) => {
+    const { configured } = getTmdbCredentials();
     const q = String(req.query.q || '').trim().slice(0, 100);
-    const city = String(req.query.city || 'Gwalior');
-
     if (!configured || !q) {
       return res.json({ source: 'local', movies: [] });
     }
 
     try {
-      const data = await fetchFromMovieGlu<{ films?: MovieGluFilmRaw[] }>(
-        '/filmLiveSearch/',
-        { query: q, n: '20' },
-        city
-      );
-      const movies = (data?.films || [])
-        .filter((f) => extractImageUrl(f.images, 'poster'))
-        .map((f) => normalizeMovieGluFilm(f));
-      return res.json({ source: 'movieglu', movies });
+      const genreMap = await getGenreMap();
+      const data = await fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/search/movie', {
+        query: q,
+        include_adult: 'false',
+        page: '1',
+      });
+      const movies = (data.results || [])
+        .filter((m) => m.poster_path)
+        .slice(0, 20)
+        .map((m) => normalizeTmdbMovie(m, genreMap));
+      return res.json({ source: 'tmdb', movies });
     } catch {
       return res.status(502).json({ source: 'local', movies: [] });
     }
   });
 
-  app.get('/api/movieglu/movie/:id', async (req: Request, res: Response) => {
-    const { configured } = getMovieGluCredentials();
+  app.get('/api/tmdb/movie/:id', async (req: Request, res: Response) => {
+    const { configured } = getTmdbCredentials();
     const rawId = String(req.params.id || '');
-    const city = String(req.query.city || 'Gwalior');
-
     if (!configured || !/^\d+$/.test(rawId)) {
-      return res.status(400).json({ error: 'Invalid or unconfigured MovieGlu film lookup' });
+      return res.status(400).json({ error: 'Invalid or unconfigured TMDB movie lookup' });
     }
 
     try {
-      const detail = await fetchFromMovieGlu<MovieGluFilmRaw>(
-        '/filmDetails/',
-        { film_id: rawId },
-        city
-      );
-      if (!detail) {
-        return res.status(404).json({ error: 'Film not found' });
-      }
-      return res.json({ movie: normalizeMovieGluFilm(detail) });
-    } catch {
-      return res.status(502).json({ error: 'Failed to load MovieGlu film details' });
-    }
-  });
-
-  app.get('/api/movieglu/showtimes/:id', async (req: Request, res: Response) => {
-    const { configured } = getMovieGluCredentials();
-    const rawId = String(req.params.id || '');
-    const city = String(req.query.city || 'Gwalior');
-    const dateParam = String(req.query.date || new Date().toISOString().slice(0, 10));
-
-    if (!configured || !/^\d+$/.test(rawId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      return res.json({ source: 'local', theatres: [] });
-    }
-
-    try {
-      const data = await fetchFromMovieGlu<{ cinemas?: MovieGluCinemaRaw[] }>(
-        '/filmShowTimes/',
-        { film_id: rawId, date: dateParam, n: '6' },
-        city
-      );
-
-      const cinemas = data?.cinemas || [];
-      if (cinemas.length === 0) {
-        return res.json({ source: 'local', theatres: [] });
-      }
-
-      const theatres = cinemas.map((c) => {
-        const showingsObj = c.showings || {};
-        const slots: {
-          id: string;
-          time: string;
-          format: string;
-          screen: string;
-          availability: 'available' | 'filling-fast' | 'almost-full';
-          priceMultiplier: number;
-        }[] = [];
-
-        Object.entries(showingsObj).forEach(([formatName, group]) => {
-          (group.times || []).forEach((t, idx) => {
-            slots.push({
-              id: `mg-${c.cinema_id}-${formatName}-${idx}`,
-              time: formatShowtimeLabel(t.start_time),
-              format: formatName || 'Standard 2D',
-              screen: `SCREEN ${((idx % 4) + 1)}`,
-              availability: idx % 3 === 1 ? 'filling-fast' : 'available',
-              priceMultiplier: formatName.toLowerCase().includes('imax') ? 1.2 : 1,
-            });
-          });
-        });
-
-        return {
-          id: `mg-cinema-${c.cinema_id}`,
-          name: c.cinema_name,
-          area: [c.address, c.city || city].filter(Boolean).join(', '),
-          amenities: ['M-Ticket', 'Dolby Sound', 'Online Booking'],
-          showtimes: slots.slice(0, 8),
-        };
-      }).filter((t) => t.showtimes.length > 0);
-
-      return res.json({
-        source: theatres.length > 0 ? 'movieglu' : 'local',
-        theatres,
+      const genreMap = await getGenreMap();
+      const raw = await fetchFromTmdb<TmdbMovieRaw>(`/movie/${rawId}`, {
+        append_to_response: 'credits',
       });
+      return res.json({ movie: normalizeTmdbMovie(raw, genreMap) });
     } catch {
-      return res.json({ source: 'local', theatres: [] });
+      return res.status(502).json({ error: 'Failed to load TMDB movie details' });
     }
   });
 

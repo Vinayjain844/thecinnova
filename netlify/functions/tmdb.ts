@@ -171,64 +171,81 @@ export default async function handler(req: Request): Promise<Response> {
         return jsonResponse({ source: 'tmdb', tmdbConfigured: true, movies });
       }
       if (category === 'upcoming') {
-        const [p1, p2] = await Promise.all([
+        const [in1, in2, global1] = await Promise.all([
           fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '1', region: 'IN' }),
           fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '2', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '1', language: 'en-US' }),
         ]);
+
         const seen = new Set<number>();
-        const movies = [...p1.results, ...p2.results]
+        const todayCutoffMs = Date.now() - 86400_000;
+        const upcomingPool = [...(in1.results || []), ...(in2.results || []), ...(global1.results || [])]
           .filter((m) => {
             if (!m.poster_path || seen.has(m.id)) return false;
+            const relMs = m.release_date ? new Date(m.release_date).getTime() : 0;
+            if (relMs && relMs < todayCutoffMs) return false;
             seen.add(m.id);
             return true;
           })
+          .slice(0, 24);
+
+        const featuredIds = upcomingPool
+          .filter((m) => Boolean(m.backdrop_path && m.overview && m.overview.trim().length > 20))
+          .slice(0, 6)
+          .map((m) => m.id);
+
+        const detailResults = await Promise.allSettled(
+          featuredIds.map((id) =>
+            fetchFromTmdb<TmdbMovieRaw>(`/movie/${id}`, { append_to_response: 'credits' })
+          )
+        );
+        const enrichedMap = new Map<number, TmdbMovieRaw>();
+        detailResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value?.id) {
+            enrichedMap.set(result.value.id, result.value);
+          }
+        });
+
+        const movies = upcomingPool
           .slice(0, 20)
-          .map((m) => normalizeTmdbMovie(m, genreMap, 'upcoming'));
+          .map((m) => normalizeTmdbMovie(enrichedMap.get(m.id) || m, genreMap, 'upcoming'));
         return jsonResponse({ source: 'tmdb', tmdbConfigured: true, movies });
       }
-      if (category === 'now-showing') {
-        const [p1, p2] = await Promise.all([
+      if (category === 'now-showing' || category === 'all') {
+        const [in1, in2, global1, global2] = await Promise.all([
           fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '1', region: 'IN' }),
           fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '2', region: 'IN' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '1', language: 'en-US' }),
+          fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '2', language: 'en-US' }),
         ]);
+
         const seen = new Set<number>();
-        const movies = [...p1.results, ...p2.results]
-          .filter((m) => {
-            if (!m.poster_path || seen.has(m.id)) return false;
-            seen.add(m.id);
-            return true;
-          })
-          .slice(0, 25)
+        const pool: TmdbMovieRaw[] = [];
+        const cutoffMs = Date.now() + 2 * 86400_000;
+        const minRecentMs = Date.now() - 180 * 86400_000;
+
+        for (const m of [...(in1.results || []), ...(in2.results || []), ...(global1.results || []), ...(global2.results || [])]) {
+          if (!m.poster_path || seen.has(m.id)) continue;
+          const relMs = m.release_date ? new Date(m.release_date).getTime() : 0;
+          if (!relMs || relMs > cutoffMs || relMs < minRecentMs) continue;
+          seen.add(m.id);
+          pool.push(m);
+        }
+
+        pool.sort((a, b) => {
+          const da = a.release_date ? new Date(a.release_date).getTime() : 0;
+          const db = b.release_date ? new Date(b.release_date).getTime() : 0;
+          if (db !== da) return db - da;
+          return (b.vote_count || 0) - (a.vote_count || 0);
+        });
+
+        const movies = pool
+          .slice(0, 30)
           .map((m) => normalizeTmdbMovie(m, genreMap, 'now-showing'));
         return jsonResponse({ source: 'tmdb', tmdbConfigured: true, movies });
       }
 
-      const [now1, pop1, up1] = await Promise.all([
-        fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/now_playing', { page: '1', region: 'IN' }),
-        fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/popular', { page: '1', region: 'IN' }),
-        fetchFromTmdb<{ results: TmdbMovieRaw[] }>('/movie/upcoming', { page: '1', region: 'IN' }),
-      ]);
-      const seen = new Set<number>();
-      const combined: ReturnType<typeof normalizeTmdbMovie>[] = [];
-      for (const m of now1.results || []) {
-        if (m.poster_path && !seen.has(m.id)) {
-          seen.add(m.id);
-          combined.push(normalizeTmdbMovie(m, genreMap, 'now-showing'));
-        }
-      }
-      for (const m of pop1.results || []) {
-        if (m.poster_path && !seen.has(m.id) && combined.length < 24) {
-          seen.add(m.id);
-          combined.push(normalizeTmdbMovie(m, genreMap, 'now-showing'));
-        }
-      }
-      for (const m of up1.results || []) {
-        if (m.poster_path && !seen.has(m.id) && combined.length < 30) {
-          seen.add(m.id);
-          combined.push(normalizeTmdbMovie(m, genreMap, 'upcoming'));
-        }
-      }
-      return jsonResponse({ source: 'tmdb', tmdbConfigured: true, movies: combined.slice(0, 30) });
+      return jsonResponse({ source: 'local', tmdbConfigured: true, movies: [] });
     } catch {
       return jsonResponse({ source: 'local', tmdbConfigured: true, movies: [] }, 502);
     }

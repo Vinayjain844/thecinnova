@@ -1,0 +1,294 @@
+{
+  "entities": {
+    "UserPrivateProfile": {
+      "title": "UserPrivateProfile",
+      "description": "Private user account profile storing PII and preferences isolated per authenticated user UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document path owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified user email address.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number.",
+          "minLength": 0,
+          "maxLength": 24
+        },
+        "preferredCity": {
+          "type": "string",
+          "description": "Selected cinema city.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "provider": {
+          "type": "string",
+          "description": "Authentication provider used for sign-in.",
+          "enum": ["google", "password"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was last updated."
+        }
+      },
+      "required": ["uid", "name", "email", "preferredCity", "provider", "createdAt", "updatedAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Confirmed M-Ticket booking record owned by a verified user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "bookingId": {
+          "type": "string",
+          "description": "Unique booking pass identifier.",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "paymentId": {
+          "type": "string",
+          "description": "Demo payment transaction reference.",
+          "minLength": 4,
+          "maxLength": 64
+        },
+        "movieId": {
+          "type": "string",
+          "description": "Catalog or TMDB movie identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "movieTitle": {
+          "type": "string",
+          "description": "Movie display title.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "movieLanguage": {
+          "type": "string",
+          "description": "Screening language.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "movieCertification": {
+          "type": "string",
+          "description": "Censor certification label.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "posterImage": {
+          "type": "string",
+          "description": "Optional poster URL.",
+          "maxLength": 500
+        },
+        "city": {
+          "type": "string",
+          "description": "Cinema city.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "theatreName": {
+          "type": "string",
+          "description": "Multiplex name.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "theatreArea": {
+          "type": "string",
+          "description": "Multiplex locality.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "dateLabel": {
+          "type": "string",
+          "description": "Formatted show date.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "showtime": {
+          "type": "string",
+          "description": "Showtime slot label.",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "format": {
+          "type": "string",
+          "description": "Projection format.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "screen": {
+          "type": "string",
+          "description": "Auditorium screen identifier.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "seats": {
+          "type": "array",
+          "description": "Booked seat codes (max 8 seats)."
+        },
+        "ticketSubtotal": {
+          "type": "number",
+          "description": "Ticket subtotal in INR."
+        },
+        "convenienceFee": {
+          "type": "number",
+          "description": "Convenience fee in INR."
+        },
+        "gst": {
+          "type": "number",
+          "description": "GST tax amount in INR."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total payable amount in INR."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment mode label.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "bookedAt": {
+          "type": "string",
+          "description": "Client display timestamp string.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "customerEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Ticket holder email.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when booking was stored."
+        }
+      },
+      "required": [
+        "uid",
+        "bookingId",
+        "paymentId",
+        "movieId",
+        "movieTitle",
+        "movieLanguage",
+        "movieCertification",
+        "city",
+        "theatreName",
+        "theatreArea",
+        "dateLabel",
+        "showtime",
+        "format",
+        "screen",
+        "seats",
+        "ticketSubtotal",
+        "convenienceFee",
+        "gst",
+        "totalAmount",
+        "paymentMethod",
+        "bookedAt",
+        "customerEmail",
+        "createdAt"
+      ]
+    },
+    "CalendarAlert": {
+      "title": "CalendarAlert",
+      "description": "Upcoming movie saved to a user's release calendar.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "movieId": {
+          "type": "string",
+          "description": "Upcoming movie ID matching document ID.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Upcoming movie title.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "releaseDate": {
+          "type": "string",
+          "description": "Scheduled release date string.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "genres": {
+          "type": "array",
+          "description": "Movie genre names (max 5)."
+        },
+        "language": {
+          "type": "string",
+          "description": "Primary movie language.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "posterImage": {
+          "type": "string",
+          "description": "Optional poster image URL.",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when alert was added."
+        }
+      },
+      "required": ["uid", "movieId", "title", "releaseDate", "genres", "language", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/private/profile": {
+      "schema": { "$ref": "#/entities/UserPrivateProfile" },
+      "description": "Private PII profile for the authenticated user."
+    },
+    "/users/{userId}/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "User's confirmed M-Ticket booking passes."
+    },
+    "/users/{userId}/calendarAlerts/{movieId}": {
+      "schema": { "$ref": "#/entities/CalendarAlert" },
+      "description": "Upcoming movie release calendar reminders for the user."
+    }
+  }
+}
