@@ -27,6 +27,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   selectedGenre,
   genres,
   isLoading,
+  dataSource,
   onSelectGenre,
   onSelectMovie,
   notifiedIds,
@@ -99,6 +100,12 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
           })}
         </div>
       </div>
+
+      {!isLoading && dataSource === 'local' && (
+        <p role="status" className="mt-5 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Live movie data is unavailable. Showing a sample catalog instead.
+        </p>
+      )}
 
       {/* Loading State */}
       {isLoading ? (

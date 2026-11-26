@@ -56,7 +56,8 @@ export default function App() {
   const [upcomingAdMovies, setUpcomingAdMovies] = useState<Movie[]>([]);
   const [searchResults, setSearchResults] = useState<Movie[] | null>(null);
   const [dataSource, setDataSource] = useState<'tmdb' | 'local'>('local');
-  const [isLoadingMovies, setIsLoadingMovies] = useState(false);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+  const [isSearchingMovies, setIsSearchingMovies] = useState(false);
 
   // Modals & User state
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
@@ -165,13 +166,13 @@ export default function App() {
   // Fetch category movies from backend TMDB proxy
   useEffect(() => {
     let cancelled = false;
-    setIsLoadingMovies(true);
+    setIsLoadingCatalog(true);
 
     fetch(`/api/tmdb/movies?category=${encodeURIComponent(activeTab)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        if (data?.source === 'tmdb' && Array.isArray(data.movies) && data.movies.length > 0) {
+        if (data?.source === 'tmdb' && Array.isArray(data.movies)) {
           setCatalogMovies(data.movies);
           setDataSource('tmdb');
         } else {
@@ -186,7 +187,7 @@ export default function App() {
         }
       })
       .finally(() => {
-        if (!cancelled) setIsLoadingMovies(false);
+        if (!cancelled) setIsLoadingCatalog(false);
       });
 
     return () => {
@@ -217,14 +218,15 @@ export default function App() {
   // Debounced live search via TMDB proxy when TMDB is active
   useEffect(() => {
     const q = searchQuery.trim();
+    setSearchResults(null);
     if (!q || dataSource !== 'tmdb') {
-      setSearchResults(null);
+      setIsSearchingMovies(false);
       return;
     }
 
     let cancelled = false;
+    setIsSearchingMovies(true);
     const timer = window.setTimeout(() => {
-      setIsLoadingMovies(true);
       fetch(`/api/tmdb/search?q=${encodeURIComponent(q)}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
@@ -236,7 +238,7 @@ export default function App() {
           if (!cancelled) setSearchResults(null);
         })
         .finally(() => {
-          if (!cancelled) setIsLoadingMovies(false);
+          if (!cancelled) setIsSearchingMovies(false);
         });
     }, 320);
 
@@ -534,7 +536,7 @@ export default function App() {
           searchQuery={searchQuery}
           selectedGenre={selectedGenre}
           genres={availableGenres}
-          isLoading={isLoadingMovies}
+          isLoading={isLoadingCatalog || isSearchingMovies}
           dataSource={dataSource}
           onSelectGenre={setSelectedGenre}
           onSelectMovie={setSelectedMovie}

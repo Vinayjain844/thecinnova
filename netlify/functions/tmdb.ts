@@ -152,6 +152,10 @@ export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const pathname = url.pathname.replace(/^\/\.netlify\/functions\/tmdb/, '').replace(/^\/api\/tmdb/, '');
 
+  if (pathname === '/api/health') {
+    return jsonResponse({ ok: true, provider: 'tmdb', tmdbConfigured: configured });
+  }
+
   if (pathname === '/movies' || pathname === '') {
     if (!configured) {
       return jsonResponse({ source: 'local', tmdbConfigured: false, movies: [] });
