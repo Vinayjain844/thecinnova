@@ -103,7 +103,7 @@ export const MentorGuideModal: React.FC<MentorGuideModalProps> = ({
                   1. Project Introduction & Scope
                 </h3>
                 <p className="mt-2 leading-relaxed">
-                  <strong>CinNova</strong> is a full-featured online movie ticket booking web application built as a college micro-project by <strong>The Neon</strong>. It delivers a multiplex booking journey inspired by modern ticketing platforms—combining live theatrical listings from TMDB, city-aware showtimes, an interactive tiered seat selection dashboard, a Razorpay test-mode payment simulation, and instant QR M-Ticket passes.
+                  <strong>CinNova</strong> is a full-featured online movie ticket booking web application built as a college micro-project by <strong>The Neon</strong>. It delivers a multiplex booking journey inspired by modern ticketing platforms—combining live theatrical listings from TMDB, city-aware showtimes, an interactive tiered seat selection dashboard, a Sandbox payment gateway simulation, and instant QR M-Ticket passes.
                 </p>
               </div>
 
@@ -126,10 +126,10 @@ export const MentorGuideModal: React.FC<MentorGuideModalProps> = ({
                   </h4>
                   <ul className="mt-2.5 space-y-2 text-xs leading-relaxed">
                     <li>
-                      <strong className="text-[#070910] dark:text-slate-100">Guest Moviegoer:</strong> Browse All, Top Rated, Now Showing, and Upcoming titles, filter by genre or search, switch cities, and inspect seat layouts.
+                      <strong className="text-[#070910] dark:text-slate-100">Guest Moviegoer:</strong> Browse All, Top Rated, Now Showing, and Upcoming titles, filter by genre or search, switch cities, and preview movie details &amp; showtimes (sign-in required to book tickets).
                     </li>
                     <li>
-                      <strong className="text-[#070910] dark:text-slate-100">Signed-In User:</strong> Add upcoming movies to their Release Calendar, access <em>My Bookings</em> in the header, and manage QR M-Ticket passes.
+                      <strong className="text-[#070910] dark:text-slate-100">Signed-In User:</strong> Select showtimes &amp; seats, complete Sandbox checkout, add upcoming movies to their Release Calendar, access <em>My Bookings</em>, and manage QR M-Ticket passes.
                     </li>
                     <li>
                       <strong className="text-[#070910] dark:text-slate-100">Backend Proxy:</strong> Validates inputs, maps TMDB genres, enriches upcoming spotlights, and keeps credentials server-side.
@@ -204,8 +204,8 @@ export const MentorGuideModal: React.FC<MentorGuideModalProps> = ({
                       </tr>
                       <tr>
                         <td className="px-4 py-3 font-medium text-[#070910] dark:text-white">Payment Gateway</td>
-                        <td className="px-4 py-3">Demo Razorpay Checkout Modal</td>
-                        <td className="px-4 py-3">Simulated UPI, Card, Netbanking & Wallet checkout</td>
+                        <td className="px-4 py-3">Sandbox Payment Gateway</td>
+                        <td className="px-4 py-3">Simulated UPI, Card, Netbanking & Wallet checkout with Approve/Decline test states</td>
                       </tr>
                     </tbody>
                   </table>
@@ -346,10 +346,10 @@ export const MentorGuideModal: React.FC<MentorGuideModalProps> = ({
                 <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
                   <div className="flex items-center gap-2 font-display text-sm font-bold text-[#070910] dark:text-white">
                     <CreditCard className="h-4 w-4 text-blue-600 dark:text-lime-400" />
-                    <span>Step 2 · Razorpay Demo Payment</span>
+                    <span>Step 2 · Sandbox Payment Gateway</span>
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                    Proceed to the integrated Razorpay test-mode checkout modal supporting UPI/QR, Debit/Credit Card, Netbanking, and Wallet methods with simulated payment confirmation.
+                    Proceed to the integrated Sandbox checkout modal supporting UPI/QR, Debit/Credit Card, Netbanking, and Wallet methods with simulated Approve or Decline responses.
                   </p>
                 </div>
 

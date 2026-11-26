@@ -6,6 +6,7 @@ import { PosterArtwork } from './PosterArtwork';
 interface MovieCardProps {
   movie: Movie;
   onSelect: (movie: Movie) => void;
+  isSignedIn?: boolean;
   isNotified?: boolean;
   onToggleNotify?: (movieId: string) => void;
 }
@@ -13,6 +14,7 @@ interface MovieCardProps {
 export const MovieCard: React.FC<MovieCardProps> = ({
   movie,
   onSelect,
+  isSignedIn = false,
   isNotified = false,
   onToggleNotify,
 }) => {
@@ -31,7 +33,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
             onSelect(movie);
           }
         }}
-        aria-label={`${movie.title} — ${isUpcoming ? 'Preview release' : 'Pick seats'}`}
+        aria-label={`${movie.title} — ${isUpcoming ? 'Preview release' : isSignedIn ? 'Book seats' : 'View showtimes'}`}
         className="relative aspect-[2/3] w-full cursor-pointer overflow-hidden rounded-xl bg-slate-200 shadow-sm ring-1 ring-slate-900/10 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-hover:ring-blue-500/60 group-hover:shadow-xl group-hover:shadow-blue-900/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-[#0D111C] dark:ring-blue-500/20 dark:group-hover:ring-lime-400/65 dark:group-hover:shadow-blue-950/60"
       >
         <PosterArtwork
@@ -46,7 +48,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#070910]/45 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover:opacity-100">
           <span className="inline-flex translate-y-2 items-center gap-1.5 rounded-xl bg-lime-400 px-3.5 py-2 text-xs font-bold text-[#070910] shadow-lg transition-transform duration-200 group-hover:translate-y-0 whitespace-nowrap">
             <Ticket className="h-3.5 w-3.5" aria-hidden="true" />
-            {isUpcoming ? 'Preview Movie' : 'Book Seats'}
+            {isUpcoming ? 'Preview Movie' : isSignedIn ? 'Book Seats' : 'View Showtimes'}
           </span>
         </div>
 

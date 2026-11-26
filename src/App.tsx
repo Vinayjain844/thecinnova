@@ -6,7 +6,7 @@ import { FloatingAdCarousel } from './components/FloatingAdCarousel';
 import { MovieGrid } from './components/MovieGrid';
 import { Footer } from './components/Footer';
 import { BookingModal, PendingCheckoutPayload } from './components/BookingModal';
-import { RazorpayDemoModal } from './components/RazorpayDemoModal';
+import { SandboxPaymentModal } from './components/SandboxPaymentModal';
 import { CityModal } from './components/CityModal';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
@@ -66,6 +66,10 @@ export default function App() {
   const [isMentorGuideOpen, setIsMentorGuideOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [signInPrompt, setSignInPrompt] = useState<string | null>(null);
+
+  const canBook = Boolean(authReady && user && user.emailVerified);
+  const needsEmailVerification = Boolean(authReady && user && !user.emailVerified);
 
   // Booking & Seat Lock / Sold state
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -87,17 +91,9 @@ export default function App() {
     window.localStorage.setItem('cinnova_sold_seats', JSON.stringify(soldSeatMap));
   }, [soldSeatMap]);
 
-  // Listen to Firebase Auth state and sync Firestore user profile, bookings, and calendar alerts
+  // Listen to Firebase Auth state
   useEffect(() => {
-    let unsubBookings: (() => void) | null = null;
-    let unsubAlerts: (() => void) | null = null;
-
-    const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
-      unsubBookings?.();
-      unsubAlerts?.();
-      unsubBookings = null;
-      unsubAlerts = null;
-
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
       if (!fbUser) {
         setUser(null);
         setBookings([]);
@@ -113,55 +109,79 @@ export default function App() {
         ? 'google'
         : 'password';
 
-      const baseProfile: UserProfile = {
-        uid: fbUser.uid,
-        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'CinNova Member',
-        email: fbUser.email || '',
-        phone: fbUser.phoneNumber || '',
-        preferredCity: selectedCity,
-        provider,
-        emailVerified: fbUser.emailVerified,
-      };
-      setUser(baseProfile);
+      setUser((prev) => {
+        const sameUid = prev?.uid === fbUser.uid;
+        return {
+          uid: fbUser.uid,
+          name:
+            fbUser.displayName ||
+            (sameUid ? prev?.name : undefined) ||
+            fbUser.email?.split('@')[0] ||
+            'CinNova Member',
+          email: fbUser.email || (sameUid ? prev?.email : '') || '',
+          phone: fbUser.phoneNumber || (sameUid ? prev?.phone : '') || '',
+          preferredCity: (sameUid ? prev?.preferredCity : undefined) || selectedCity,
+          provider,
+          emailVerified: fbUser.emailVerified,
+        };
+      });
       setAuthReady(true);
-
-      if (fbUser.emailVerified) {
-        try {
-          const savedProfile = await loadUserPrivateProfile(fbUser.uid);
-          if (savedProfile) {
-            setUser(savedProfile);
-            if (savedProfile.preferredCity) {
-              setSelectedCity(savedProfile.preferredCity);
-            }
-          } else {
-            await upsertUserPrivateProfile(fbUser.uid, {
-              name: baseProfile.name,
-              email: baseProfile.email,
-              phone: baseProfile.phone,
-              preferredCity: selectedCity,
-              provider,
-            });
-          }
-        } catch (err) {
-          console.error('Failed to sync user profile from Firestore:', err);
-        }
-
-        unsubBookings = subscribeUserBookings(fbUser.uid, (items) => {
-          setBookings(items);
-        });
-        unsubAlerts = subscribeUserCalendarAlerts(fbUser.uid, (alerts) => {
-          setFirestoreCalendarAlerts(alerts);
-          setNotifiedIds(alerts.map((a) => a.movieId));
-        });
-      }
     });
 
     return () => {
-      unsubBookings?.();
-      unsubAlerts?.();
       unsubAuth();
     };
   }, []);
+
+  // Sync Firestore private profile and attach bookings/calendar listeners once verified
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!user || !uid || !user.emailVerified) return;
+
+    let cancelled = false;
+    const initialProfile = {
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      preferredCity: user.preferredCity || selectedCity,
+      provider: user.provider || ('google' as const),
+    };
+
+    (async () => {
+      try {
+        const savedProfile = await loadUserPrivateProfile(uid);
+        if (cancelled) return;
+        if (savedProfile) {
+          setUser((prev) =>
+            prev && prev.uid === savedProfile.uid
+              ? { ...prev, ...savedProfile, emailVerified: true }
+              : savedProfile
+          );
+          if (savedProfile.preferredCity) {
+            setSelectedCity(savedProfile.preferredCity);
+          }
+        } else {
+          await upsertUserPrivateProfile(uid, initialProfile);
+        }
+      } catch (err) {
+        console.error('Failed to sync user profile from Firestore:', err);
+      }
+    })();
+
+    const unsubBookings = subscribeUserBookings(uid, (items) => {
+      setBookings(items);
+    });
+    const unsubAlerts = subscribeUserCalendarAlerts(uid, (alerts) => {
+      setFirestoreCalendarAlerts(alerts);
+      setNotifiedIds(alerts.map((a) => a.movieId));
+    });
+
+    return () => {
+      cancelled = true;
+      unsubBookings();
+      unsubAlerts();
+    };
+  }, [user?.uid, user?.emailVerified]);
 
   // Fetch category movies from backend TMDB proxy
   useEffect(() => {
@@ -275,6 +295,9 @@ export default function App() {
 
   const handleSignOut = async () => {
     setIsMyTicketsOpen(false);
+    setPendingCheckout(null);
+    setPendingNotifyMovieId(null);
+    setSignInPrompt(null);
     try {
       await signOut(auth);
     } catch (err) {
@@ -286,10 +309,15 @@ export default function App() {
     setFirestoreCalendarAlerts([]);
   };
 
+  const openSignInWithPrompt = (message?: string) => {
+    setSignInPrompt(message ?? null);
+    setIsSignInOpen(true);
+  };
+
   const handleToggleNotify = async (movieId: string) => {
     if (!user || !authReady) {
       setPendingNotifyMovieId(movieId);
-      setIsSignInOpen(true);
+      openSignInWithPrompt('Sign in to add this movie release to your calendar');
       return;
     }
 
@@ -396,14 +424,28 @@ export default function App() {
     if (found) setSelectedMovie(found);
   };
 
+  const handleProceedToPayment = (payload: PendingCheckoutPayload) => {
+    if (!canBook) {
+      openSignInWithPrompt(
+        needsEmailVerification
+          ? 'Verify your email address to book tickets.'
+          : 'Sign in or create an account to book tickets.'
+      );
+      return;
+    }
+    setPendingCheckout(payload);
+  };
+
   const handlePaymentSuccess = (booking: BookingRecord) => {
+    if (!user?.uid || !user.emailVerified || !auth.currentUser) {
+      return;
+    }
+
     setBookings((prev) => [booking, ...prev]);
 
-    if (user?.uid && user.emailVerified) {
-      saveUserBooking(user.uid, booking).catch((err) => {
-        console.error('Failed to save booking to Firestore:', err);
-      });
-    }
+    saveUserBooking(user.uid, booking).catch((err) => {
+      console.error('Failed to save booking to Firestore:', err);
+    });
 
     if (pendingCheckout) {
       const dateOptionsMap: Record<string, string> = {
@@ -507,7 +549,7 @@ export default function App() {
         selectedCity={selectedCity}
         onOpenCityModal={() => setIsCityModalOpen(true)}
         user={user}
-        onOpenSignIn={() => setIsSignInOpen(true)}
+        onOpenSignIn={() => openSignInWithPrompt()}
         onSignOut={handleSignOut}
         isDark={isDark}
         onToggleTheme={() => setIsDark((prev) => !prev)}
@@ -540,6 +582,7 @@ export default function App() {
           dataSource={dataSource}
           onSelectGenre={setSelectedGenre}
           onSelectMovie={setSelectedMovie}
+          isSignedIn={canBook}
           notifiedIds={user ? notifiedIds : []}
           onToggleNotify={handleToggleNotify}
           onResetFilters={() => {
@@ -564,14 +607,17 @@ export default function App() {
         movie={selectedMovie}
         city={selectedCity}
         soldSeatMap={soldSeatMap}
+        canBook={canBook}
+        needsEmailVerification={needsEmailVerification}
         isNotified={Boolean(user && selectedMovie && notifiedIds.includes(selectedMovie.id))}
         onToggleNotify={handleToggleNotify}
+        onRequireAuth={(msg) => openSignInWithPrompt(msg)}
         onClose={() => setSelectedMovie(null)}
-        onProceedToPayment={(payload) => setPendingCheckout(payload)}
+        onProceedToPayment={handleProceedToPayment}
       />
 
-      <RazorpayDemoModal
-        checkout={pendingCheckout}
+      <SandboxPaymentModal
+        checkout={canBook ? pendingCheckout : null}
         user={user}
         onClose={handleClosePaymentModal}
         onPaymentSuccess={handlePaymentSuccess}
@@ -598,14 +644,16 @@ export default function App() {
       <SignInModal
         isOpen={isSignInOpen}
         promptMessage={
-          pendingNotifyMovieId
+          signInPrompt ||
+          (pendingNotifyMovieId
             ? 'Sign in to add this movie release to your calendar'
-            : undefined
+            : undefined)
         }
         selectedCity={selectedCity}
         onClose={() => {
           setIsSignInOpen(false);
           setPendingNotifyMovieId(null);
+          setSignInPrompt(null);
         }}
         onAuthComplete={handleAuthComplete}
       />

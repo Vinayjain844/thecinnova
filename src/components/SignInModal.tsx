@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  Eye,
+  EyeOff,
   Lock,
   Mail,
   Phone,
@@ -11,12 +13,12 @@ import {
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-import { upsertUserPrivateProfile } from '../services/firebaseUserService';
 import { UserProfile } from '../types/cinema';
 
 interface SignInModalProps {
@@ -31,7 +33,11 @@ function mapFirebaseAuthError(err: unknown): string {
   const code = (err as { code?: string })?.code || '';
   switch (code) {
     case 'auth/operation-not-allowed':
-      return 'Email/Password sign-in is not enabled in Firebase Console yet. Enable it under Authentication → Sign-in method, or use Continue with Google.';
+      return 'Email/Password sign-in is disabled in Firebase Console right now. Click "Continue with Google" above for instant sign-in, or enable Email/Password under Firebase Console → Authentication → Sign-in method.';
+    case 'auth/unauthorized-domain': {
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+      return `This domain (${host}) is not authorized in Firebase Auth yet. Add it under Firebase Console → Authentication → Settings → Authorized domains.`;
+    }
     case 'auth/email-already-in-use':
       return 'An account with this email already exists. Switch to Sign In to log in.';
     case 'auth/invalid-credential':
@@ -43,13 +49,23 @@ function mapFirebaseAuthError(err: unknown): string {
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/popup-closed-by-user':
-      return 'Google sign-in popup was closed before finishing.';
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in popup was closed before finishing. Please try again.';
     case 'auth/popup-blocked':
-      return 'Sign-in popup was blocked by your browser. Please allow popups for this site.';
+      return 'Sign-in popup was blocked by your browser. Please allow popups for this site and retry.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with this email using a different sign-in method. Try Continue with Google.';
+    case 'auth/network-request-failed':
+      return 'Network error while connecting to Firebase Auth. Please check your connection and try again.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Please wait a moment and try again.';
-    default:
-      return err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+    default: {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.startsWith('{') && msg.includes('"operationType"')) {
+        return 'Signed in, but syncing your Firestore profile encountered a permission issue. Please try refreshing.';
+      }
+      return msg || 'Authentication failed. Please try again.';
+    }
   }
 }
 
@@ -64,11 +80,31 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setError('');
+    setInfoMsg('');
+    setPassword('');
+    setShowPassword(false);
+    setIsSubmitting(false);
+
+    const current = auth.currentUser;
+    if (current && !current.emailVerified) {
+      setNeedsVerification(true);
+      setInfoMsg(
+        `Signed in as ${current.email || 'your account'}. Verify your email link to sync bookings & calendar alerts to Firestore.`
+      );
+    } else {
+      setNeedsVerification(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -88,17 +124,27 @@ export const SignInModal: React.FC<SignInModalProps> = ({
         provider: 'google',
         emailVerified: fbUser.emailVerified,
       };
-      if (fbUser.emailVerified) {
-        await upsertUserPrivateProfile(fbUser.uid, {
-          name: profile.name,
-          email: profile.email,
-          phone: profile.phone,
-          preferredCity: selectedCity,
-          provider: 'google',
-        });
-      }
       onAuthComplete(profile);
       onClose();
+    } catch (err) {
+      setError(mapFirebaseAuthError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setInfoMsg('');
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Enter your email address first, then click Forgot password.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      setInfoMsg(`Password reset email sent to ${cleanEmail}. Check your inbox or spam folder.`);
     } catch (err) {
       setError(mapFirebaseAuthError(err));
     } finally {
@@ -163,18 +209,10 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           provider: 'password',
           emailVerified: fbUser.emailVerified,
         };
+        onAuthComplete(profile);
         if (fbUser.emailVerified) {
-          await upsertUserPrivateProfile(fbUser.uid, {
-            name: profile.name,
-            email: profile.email,
-            phone: profile.phone,
-            preferredCity: selectedCity,
-            provider: 'password',
-          });
-          onAuthComplete(profile);
           onClose();
         } else {
-          onAuthComplete(profile);
           setNeedsVerification(true);
           setInfoMsg(
             `Signed in as ${profile.email}. Please verify your email address so Firestore can store your profile and bookings.`
@@ -205,13 +243,6 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           provider: 'password',
           emailVerified: true,
         };
-        await upsertUserPrivateProfile(fbUser.uid, {
-          name: profile.name,
-          email: profile.email,
-          phone: profile.phone,
-          preferredCity: selectedCity,
-          provider: 'password',
-        });
         onAuthComplete(profile);
         setNeedsVerification(false);
         onClose();
@@ -244,7 +275,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Sign in or sign up to CinNova"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#070910]/80 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-[#070910]/80 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
@@ -356,6 +387,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 onClick={() => {
                   setMode('signin');
                   setError('');
+                  setInfoMsg('');
                 }}
                 className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
                   mode === 'signin'
@@ -370,6 +402,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 onClick={() => {
                   setMode('signup');
                   setError('');
+                  setInfoMsg('');
                 }}
                 className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
                   mode === 'signup'
@@ -394,6 +427,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Enter your name"
+                      autoComplete="name"
                       maxLength={80}
                       className="w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-9 pr-3 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
                     />
@@ -412,6 +446,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
+                    autoComplete="email"
                     maxLength={160}
                     className="w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-9 pr-3 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
                   />
@@ -419,18 +454,39 @@ export const SignInModal: React.FC<SignInModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-                  Password
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Password
+                  </label>
+                  {mode === 'signin' && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleForgotPassword}
+                      className="text-[11px] font-medium text-blue-600 hover:underline dark:text-lime-400"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
                 <div className="relative mt-1">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Minimum 6 characters"
-                    className="w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-9 pr-3 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                    className="w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-9 pr-10 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-lime-400"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -446,11 +502,18 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+91 98765 43210"
+                      autoComplete="tel"
                       maxLength={24}
                       className="font-mono-tabular w-full rounded-xl border border-slate-200 bg-[#F4F7FC] py-2.5 pl-9 pr-3 text-sm text-[#070910] focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-black dark:text-white dark:placeholder:text-slate-500 dark:focus:border-lime-400 dark:focus:bg-black"
                     />
                   </div>
                 </div>
+              )}
+
+              {infoMsg && (
+                <p className="rounded-xl border border-lime-500/40 bg-lime-50 px-3 py-2 text-xs font-medium text-[#070910] dark:border-lime-400/35 dark:bg-lime-400/10 dark:text-lime-200">
+                  {infoMsg}
+                </p>
               )}
 
               {error && (

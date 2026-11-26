@@ -1,10 +1,27 @@
 import { initializeApp } from 'firebase/app';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyBe16imqLPcj5KQxNGMFpWUotQMaBbhuPg',
+  authDomain: 'cinnova-001.firebaseapp.com',
+  projectId: 'cinnova-001',
+  storageBucket: 'cinnova-001.firebasestorage.app',
+  messagingSenderId: '168257981283',
+  appId: '1:168257981283:web:aafe9fb12db4d8fffd2156',
+  measurementId: 'G-LMXM3WRWJE',
+};
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+if (typeof window !== 'undefined') {
+  isSupported()
+    .then((supported) => {
+      if (supported) getAnalytics(app);
+    })
+    .catch(() => {});
+}
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

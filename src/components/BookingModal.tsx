@@ -33,8 +33,11 @@ interface BookingModalProps {
   movie: Movie | null;
   city: string;
   soldSeatMap: Record<string, string[]>;
+  canBook: boolean;
+  needsEmailVerification: boolean;
   isNotified: boolean;
   onToggleNotify: (movieId: string) => void;
+  onRequireAuth: (message: string) => void;
   onClose: () => void;
   onProceedToPayment: (payload: PendingCheckoutPayload) => void;
 }
@@ -84,8 +87,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   movie,
   city,
   soldSeatMap,
+  canBook,
+  needsEmailVerification,
   isNotified,
   onToggleNotify,
+  onRequireAuth,
   onClose,
   onProceedToPayment,
 }) => {
@@ -143,6 +149,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }, 1000);
     return () => window.clearInterval(timer);
   }, [selectedSeatIds.length]);
+
+  useEffect(() => {
+    if (!canBook) {
+      setSelectedTheatre(null);
+      setSelectedShowtime(null);
+      setSelectedSeatIds([]);
+    }
+  }, [canBook]);
 
   const activeMovie = hydratedMovie || movie;
 
@@ -245,6 +259,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   };
 
   const handleChooseShowtime = (theatre: Theatre, slot: ShowtimeSlot) => {
+    if (!canBook) {
+      onRequireAuth(
+        needsEmailVerification
+          ? 'Verify your email address to select seats and book tickets.'
+          : 'Sign in or create an account to select seats and book tickets.'
+      );
+      return;
+    }
     setSelectedTheatre(theatre);
     setSelectedShowtime(slot);
     setSelectedSeatIds([]);
@@ -418,6 +440,39 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     })}
                   </div>
                 </div>
+
+                {!canBook && (
+                  <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-blue-500/30 bg-blue-50/70 p-4 sm:flex-row sm:items-center dark:border-blue-500/35 dark:bg-blue-950/30">
+                    <div className="flex items-start gap-2.5">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-lime-400" aria-hidden="true" />
+                      <div>
+                        <p className="text-xs font-semibold text-[#070910] dark:text-slate-100">
+                          {needsEmailVerification
+                            ? 'Email verification required to book tickets'
+                            : 'Sign in required to book tickets'}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                          {needsEmailVerification
+                            ? 'Verify your email link first so your seats and QR M-Ticket can be issued.'
+                            : 'Sign in or create a CinNova account to select a showtime, pick seats, and pay.'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onRequireAuth(
+                          needsEmailVerification
+                            ? 'Verify your email address to book movie tickets.'
+                            : 'Sign in or create an account to book movie tickets.'
+                        )
+                      }
+                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-blue-500 whitespace-nowrap dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300"
+                    >
+                      {needsEmailVerification ? 'Verify Email' : 'Sign In to Book'}
+                    </button>
+                  </div>
+                )}
 
                 <div className="mt-5 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-[#0D111C]">
                   {theatres.map((theatre) => (
@@ -688,6 +743,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   type="button"
                   disabled={selectedSeatObjects.length === 0 || !selectedTheatre || !selectedShowtime}
                   onClick={() => {
+                    if (!canBook) {
+                      onRequireAuth(
+                        needsEmailVerification
+                          ? 'Verify your email address to proceed to checkout.'
+                          : 'Sign in or create an account to proceed to checkout.'
+                      );
+                      return;
+                    }
                     if (!selectedTheatre || !selectedShowtime || selectedSeatObjects.length === 0) return;
                     onProceedToPayment({
                       movie: activeMovie,
@@ -704,15 +767,23 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   }}
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:bg-lime-400 dark:text-[#070910] dark:hover:bg-lime-300 dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  {canBook ? (
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  )}
                   <span>
-                    {selectedSeatObjects.length > 0
+                    {!canBook
+                      ? needsEmailVerification
+                        ? 'Verify Email to Continue'
+                        : 'Sign In to Pay'
+                      : selectedSeatObjects.length > 0
                       ? `Proceed to Pay ₹${totalAmount}`
                       : 'Select Seats to Continue'}
                   </span>
                 </button>
                 <p className="mt-2.5 text-center text-[11px] text-slate-400 dark:text-slate-500">
-                  Razorpay Demo Checkout · Instant QR M-Ticket
+                  Sandbox Payment Gateway · Instant QR M-Ticket
                 </p>
               </div>
             </aside>

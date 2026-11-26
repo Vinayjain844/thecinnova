@@ -1,6 +1,6 @@
 {
   "name": "CinNova",
-  "description": "Online movie ticket booking platform featuring interactive seat selection and a demo Razorpay payment gateway.",
+  "description": "Online movie ticket booking platform featuring interactive seat selection and a Sandbox payment gateway.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

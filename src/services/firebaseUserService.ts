@@ -15,10 +15,12 @@ import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { BookingRecord, Movie, UserProfile } from '../types/cinema';
 
 const ID_PATTERN = /^[a-zA-Z0-9_\-]+$/;
+const pendingProfileUpserts = new Map<string, Promise<void>>();
 
 function clampStr(value: string | undefined, maxLen: number, fallback = ''): string {
-  const clean = (value ?? fallback).trim();
-  return clean.slice(0, maxLen);
+  const clean = (value ?? '').trim();
+  const effective = clean.length > 0 ? clean : fallback;
+  return effective.slice(0, maxLen);
 }
 
 function sanitizeId(value: string, fallbackPrefix: string): string {
@@ -68,33 +70,46 @@ export async function upsertUserPrivateProfile(
 ): Promise<void> {
   if (!auth.currentUser || !auth.currentUser.emailVerified) return;
   const safeUid = sanitizeId(uid, 'user');
+
+  const existingInFlight = pendingProfileUpserts.get(safeUid);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
   const path = `users/${safeUid}/private/profile`;
   const ref = doc(db, 'users', safeUid, 'private', 'profile');
 
-  try {
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
-      await updateDoc(ref, {
-        name: clampStr(profile.name, 80, 'CinNova Member'),
-        phone: clampStr(profile.phone, 24, ''),
-        preferredCity: clampStr(profile.preferredCity, 60, 'Gwalior'),
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await setDoc(ref, {
-        uid: safeUid,
-        name: clampStr(profile.name, 80, 'CinNova Member'),
-        email: clampStr(profile.email, 160, 'user@cinnova.app'),
-        phone: clampStr(profile.phone, 24, ''),
-        preferredCity: clampStr(profile.preferredCity, 60, 'Gwalior'),
-        provider: profile.provider,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+  const task = (async () => {
+    try {
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        await updateDoc(ref, {
+          name: clampStr(profile.name, 80, 'CinNova Member'),
+          phone: (profile.phone ?? '').trim().slice(0, 24),
+          preferredCity: clampStr(profile.preferredCity, 60, 'Gwalior'),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(ref, {
+          uid: safeUid,
+          name: clampStr(profile.name, 80, 'CinNova Member'),
+          email: clampStr(profile.email, 160, 'user@cinnova.app'),
+          phone: (profile.phone ?? '').trim().slice(0, 24),
+          preferredCity: clampStr(profile.preferredCity, 60, 'Gwalior'),
+          provider: profile.provider,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } finally {
+      pendingProfileUpserts.delete(safeUid);
     }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
+  })();
+
+  pendingProfileUpserts.set(safeUid, task);
+  return task;
 }
 
 export function subscribeUserBookings(
@@ -156,7 +171,7 @@ export async function saveUserBooking(uid: string, booking: BookingRecord): Prom
   const payload: Record<string, unknown> = {
     uid: safeUid,
     bookingId: safeBookingId.slice(0, 64),
-    paymentId: clampStr(booking.paymentId, 64, 'pay_demo'),
+    paymentId: clampStr(booking.paymentId, 64, 'pay_sandbox'),
     movieId: clampStr(booking.movieId, 64, 'movie'),
     movieTitle: clampStr(booking.movieTitle, 160, 'Feature Film'),
     movieLanguage: clampStr(booking.movieLanguage, 60, 'English'),

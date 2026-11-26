@@ -14,6 +14,7 @@ interface MovieGridProps {
   dataSource: 'tmdb' | 'local';
   onSelectGenre: (genre: string) => void;
   onSelectMovie: (movie: Movie) => void;
+  isSignedIn: boolean;
   notifiedIds: string[];
   onToggleNotify: (movieId: string) => void;
   onResetFilters: () => void;
@@ -30,6 +31,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
   dataSource,
   onSelectGenre,
   onSelectMovie,
+  isSignedIn,
   notifiedIds,
   onToggleNotify,
   onResetFilters,
@@ -123,6 +125,7 @@ export const MovieGrid: React.FC<MovieGridProps> = ({
               key={movie.id}
               movie={movie}
               onSelect={onSelectMovie}
+              isSignedIn={isSignedIn}
               isNotified={notifiedIds.includes(movie.id)}
               onToggleNotify={onToggleNotify}
             />
