@@ -183,6 +183,9 @@ export const RazorpayDemoModal: React.FC<RazorpayDemoModalProps> = ({
         {/* Step 1: Checkout Form */}
         {step === 'checkout' && (
           <form onSubmit={handlePayNow} className="p-5 sm:p-6">
+            <p className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              This is a simulation, not a real payment or ticket. Do not enter real payment details.
+            </p>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-[#F4F7FC] px-4 py-2.5 text-xs dark:border-slate-800 dark:bg-[#070910]">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-[#070910] dark:text-slate-100">

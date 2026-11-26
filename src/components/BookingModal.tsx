@@ -313,6 +313,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         {/* Step 1: Movie Details & Showtimes */}
         {!isSeatStep ? (
           <div className="overflow-y-auto p-5 sm:p-6">
+            <p className="mb-5 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              Demo booking: theatres, showtimes, seats and tickets are simulated, even when movie data comes from TMDB.
+            </p>
             <div className="flex flex-col gap-6 border-b border-slate-200 pb-6 md:flex-row dark:border-slate-800">
               <div className="mx-auto h-60 w-40 shrink-0 overflow-hidden rounded-xl bg-[#0B0F1A] shadow-md md:mx-0">
                 <PosterArtwork movie={activeMovie} />

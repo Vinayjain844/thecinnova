@@ -7,6 +7,11 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/tmdb"
+  status = 200
+
+[[redirects]]
   from = "/api/tmdb/*"
   to = "/.netlify/functions/tmdb"
   status = 200
