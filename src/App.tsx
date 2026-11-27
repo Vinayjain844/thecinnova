@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AD_SLIDES, MOVIES as FALLBACK_MOVIES } from './data/movies';
-import { AdSlide, BookingRecord, CategoryTab, Movie, UserProfile } from './types/cinema';
+import { AdSlide, BookingRecord, CategoryTab, GenderOption, isProfileComplete, Movie, UserProfile } from './types/cinema';
 import { Header } from './components/Header';
 import { FloatingAdCarousel } from './components/FloatingAdCarousel';
 import { MovieGrid } from './components/MovieGrid';
@@ -8,7 +8,7 @@ import { Footer } from './components/Footer';
 import { BookingModal, PendingCheckoutPayload } from './components/BookingModal';
 import { SandboxPaymentModal } from './components/SandboxPaymentModal';
 import { CityModal } from './components/CityModal';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { auth } from './firebase';
 import {
   CalendarAlertItem,
@@ -25,6 +25,37 @@ import {
 import { SignInModal } from './components/SignInModal';
 import { MyTicketsModal } from './components/MyTicketsModal';
 import { MentorGuideModal } from './components/MentorGuideModal';
+import { ProfilePage } from './components/ProfilePage';
+
+const PENDING_PROFILE_PREFIX = 'cinnova_pending_profile_';
+
+function loadPendingProfile(uid: string): UserProfile | null {
+  if (typeof window === 'undefined' || !uid) return null;
+  try {
+    const raw = window.sessionStorage.getItem(`${PENDING_PROFILE_PREFIX}${uid}`);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingProfile(uid: string, profile: UserProfile): void {
+  if (typeof window === 'undefined' || !uid) return;
+  try {
+    window.sessionStorage.setItem(`${PENDING_PROFILE_PREFIX}${uid}`, JSON.stringify(profile));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearPendingProfile(uid: string): void {
+  if (typeof window === 'undefined' || !uid) return;
+  try {
+    window.sessionStorage.removeItem(`${PENDING_PROFILE_PREFIX}${uid}`);
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export default function App() {
   // Light / Dark Theme state (defaults to Midnight Black, persisted)
@@ -46,6 +77,7 @@ export default function App() {
   }, [isDark]);
 
   // Navigation, search, and city state
+  const [activeView, setActiveView] = useState<'home' | 'profile'>('home');
   const [activeTab, setActiveTab] = useState<CategoryTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
@@ -67,9 +99,20 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [signInPrompt, setSignInPrompt] = useState<string | null>(null);
+  const [profileCheckedUid, setProfileCheckedUid] = useState<string | null>(null);
+  const [profileSyncedToFirebase, setProfileSyncedToFirebase] = useState(false);
+  const [profileSyncError, setProfileSyncError] = useState<string | null>(null);
+  const [bookingSyncError, setBookingSyncError] = useState<string | null>(null);
 
-  const canBook = Boolean(authReady && user && user.emailVerified);
   const needsEmailVerification = Boolean(authReady && user && !user.emailVerified);
+  const needsProfileCompletion = Boolean(authReady && user && !isProfileComplete(user));
+  const isOnboardingProfile = Boolean(
+    authReady &&
+      user &&
+      !isProfileComplete(user) &&
+      (!user.emailVerified || profileCheckedUid === user.uid)
+  );
+  const canBook = Boolean(authReady && user && user.emailVerified && isProfileComplete(user));
 
   // Booking & Seat Lock / Sold state
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -99,6 +142,10 @@ export default function App() {
         setBookings([]);
         setNotifiedIds([]);
         setFirestoreCalendarAlerts([]);
+        setProfileCheckedUid(null);
+        setProfileSyncedToFirebase(false);
+        setProfileSyncError(null);
+        setBookingSyncError(null);
         setAuthReady(true);
         return;
       }
@@ -108,6 +155,7 @@ export default function App() {
       )
         ? 'google'
         : 'password';
+      const pending = loadPendingProfile(fbUser.uid);
 
       setUser((prev) => {
         const sameUid = prev?.uid === fbUser.uid;
@@ -115,12 +163,22 @@ export default function App() {
           uid: fbUser.uid,
           name:
             fbUser.displayName ||
+            pending?.name ||
             (sameUid ? prev?.name : undefined) ||
             fbUser.email?.split('@')[0] ||
             'CinNova Member',
           email: fbUser.email || (sameUid ? prev?.email : '') || '',
-          phone: fbUser.phoneNumber || (sameUid ? prev?.phone : '') || '',
-          preferredCity: (sameUid ? prev?.preferredCity : undefined) || selectedCity,
+          phone: pending?.phone || fbUser.phoneNumber || (sameUid ? prev?.phone : '') || '',
+          age: pending?.age ?? (sameUid ? prev?.age : undefined),
+          gender: pending?.gender ?? (sameUid ? prev?.gender : undefined),
+          favoriteCategories:
+            pending?.favoriteCategories ?? (sameUid ? prev?.favoriteCategories : undefined),
+          preferredCity:
+            pending?.preferredCity || (sameUid ? prev?.preferredCity : undefined) || selectedCity,
+          preferredLanguage:
+            pending?.preferredLanguage ?? (sameUid ? prev?.preferredLanguage : undefined),
+          preferredFormat:
+            pending?.preferredFormat ?? (sameUid ? prev?.preferredFormat : undefined),
           provider,
           emailVerified: fbUser.emailVerified,
         };
@@ -133,38 +191,114 @@ export default function App() {
     };
   }, []);
 
+  // Automatically route newly signed-up or incomplete-profile users to Profile Page first
+  useEffect(() => {
+    if (isOnboardingProfile) {
+      setActiveView('profile');
+    }
+  }, [isOnboardingProfile]);
+
   // Sync Firestore private profile and attach bookings/calendar listeners once verified
   useEffect(() => {
     const uid = user?.uid;
     if (!user || !uid || !user.emailVerified) return;
 
     let cancelled = false;
-    const initialProfile = {
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      preferredCity: user.preferredCity || selectedCity,
-      provider: user.provider || ('google' as const),
-    };
+    setProfileSyncError(null);
 
     (async () => {
       try {
         const savedProfile = await loadUserPrivateProfile(uid);
         if (cancelled) return;
+        const pending = loadPendingProfile(uid);
+
         if (savedProfile) {
-          setUser((prev) =>
-            prev && prev.uid === savedProfile.uid
-              ? { ...prev, ...savedProfile, emailVerified: true }
-              : savedProfile
-          );
-          if (savedProfile.preferredCity) {
-            setSelectedCity(savedProfile.preferredCity);
+          if (pending && isProfileComplete(pending) && !isProfileComplete(savedProfile)) {
+            const merged: UserProfile = {
+              ...savedProfile,
+              name: pending.name || savedProfile.name,
+              phone: pending.phone || savedProfile.phone,
+              age: pending.age ?? savedProfile.age,
+              gender: pending.gender || savedProfile.gender,
+              favoriteCategories:
+                pending.favoriteCategories && pending.favoriteCategories.length > 0
+                  ? pending.favoriteCategories
+                  : savedProfile.favoriteCategories,
+              preferredCity: pending.preferredCity || savedProfile.preferredCity || selectedCity,
+              preferredLanguage: pending.preferredLanguage || savedProfile.preferredLanguage,
+              preferredFormat: pending.preferredFormat || savedProfile.preferredFormat,
+              emailVerified: true,
+            };
+            await upsertUserPrivateProfile(uid, {
+              name: merged.name,
+              email: merged.email,
+              phone: merged.phone,
+              age: merged.age,
+              gender: merged.gender,
+              favoriteCategories: merged.favoriteCategories,
+              preferredCity: merged.preferredCity || selectedCity,
+              preferredLanguage: merged.preferredLanguage,
+              preferredFormat: merged.preferredFormat,
+              provider: merged.provider === 'password' ? 'password' : 'google',
+            });
+            clearPendingProfile(uid);
+            if (!cancelled) {
+              setUser(merged);
+              if (merged.preferredCity) setSelectedCity(merged.preferredCity);
+              setProfileSyncedToFirebase(true);
+            }
+          } else {
+            setUser((prev) =>
+              prev && prev.uid === savedProfile.uid
+                ? { ...prev, ...savedProfile, emailVerified: true }
+                : savedProfile
+            );
+            if (savedProfile.preferredCity) {
+              setSelectedCity(savedProfile.preferredCity);
+            }
+            if (isProfileComplete(savedProfile)) {
+              clearPendingProfile(uid);
+            }
+            setProfileSyncedToFirebase(true);
           }
         } else {
-          await upsertUserPrivateProfile(uid, initialProfile);
+          const sourceProfile = pending && isProfileComplete(pending) ? pending : user;
+          if (isProfileComplete(sourceProfile)) {
+            await upsertUserPrivateProfile(uid, {
+              name: sourceProfile.name,
+              email: user.email,
+              phone: sourceProfile.phone,
+              age: sourceProfile.age,
+              gender: sourceProfile.gender,
+              favoriteCategories: sourceProfile.favoriteCategories,
+              preferredCity: sourceProfile.preferredCity || selectedCity,
+              preferredLanguage: sourceProfile.preferredLanguage,
+              preferredFormat: sourceProfile.preferredFormat,
+              provider: user.provider === 'password' ? 'password' : 'google',
+            });
+            clearPendingProfile(uid);
+            if (!cancelled) {
+              setUser((prev) => (prev ? { ...prev, ...sourceProfile, emailVerified: true } : prev));
+              setProfileSyncedToFirebase(true);
+            }
+          } else {
+            // Brand-new user with incomplete profile: send directly to Profile Page first
+            setProfileSyncedToFirebase(false);
+            setActiveView('profile');
+          }
         }
       } catch (err) {
         console.error('Failed to sync user profile from Firestore:', err);
+        if (!cancelled) {
+          setProfileSyncedToFirebase(false);
+          setProfileSyncError(
+            'Could not read/write Firestore in cinnova-001. Ensure firestore.rules are published.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setProfileCheckedUid(uid);
+        }
       }
     })();
 
@@ -277,7 +411,39 @@ export default function App() {
   };
 
   const handleAuthComplete = (profile: UserProfile) => {
-    setUser(profile);
+    const pending = profile.uid ? loadPendingProfile(profile.uid) : null;
+    setUser((prev) => {
+      const sameUid = prev?.uid === profile.uid;
+      const merged: UserProfile = {
+        ...profile,
+        name: profile.name || pending?.name || (sameUid ? prev?.name : '') || 'CinNova Member',
+        phone: profile.phone || pending?.phone || (sameUid ? prev?.phone : '') || '',
+        age: profile.age ?? pending?.age ?? (sameUid ? prev?.age : undefined),
+        gender: profile.gender ?? pending?.gender ?? (sameUid ? prev?.gender : undefined),
+        favoriteCategories:
+          profile.favoriteCategories ??
+          pending?.favoriteCategories ??
+          (sameUid ? prev?.favoriteCategories : undefined),
+        preferredCity:
+          profile.preferredCity ||
+          pending?.preferredCity ||
+          (sameUid ? prev?.preferredCity : undefined) ||
+          selectedCity,
+        preferredLanguage:
+          profile.preferredLanguage ??
+          pending?.preferredLanguage ??
+          (sameUid ? prev?.preferredLanguage : undefined),
+        preferredFormat:
+          profile.preferredFormat ??
+          pending?.preferredFormat ??
+          (sameUid ? prev?.preferredFormat : undefined),
+      };
+      if (!isProfileComplete(merged)) {
+        setActiveView('profile');
+      }
+      return merged;
+    });
+
     if (pendingNotifyMovieId) {
       const movieIdToSave = pendingNotifyMovieId;
       setPendingNotifyMovieId(null);
@@ -294,10 +460,18 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    if (user?.uid) {
+      clearPendingProfile(user.uid);
+    }
+    setActiveView('home');
     setIsMyTicketsOpen(false);
     setPendingCheckout(null);
     setPendingNotifyMovieId(null);
     setSignInPrompt(null);
+    setProfileCheckedUid(null);
+    setProfileSyncedToFirebase(false);
+    setProfileSyncError(null);
+    setBookingSyncError(null);
     try {
       await signOut(auth);
     } catch (err) {
@@ -314,6 +488,96 @@ export default function App() {
     setIsSignInOpen(true);
   };
 
+  const handleSelectNavTab = (tab: CategoryTab) => {
+    if (isOnboardingProfile) {
+      setActiveView('profile');
+      return;
+    }
+    setActiveTab(tab);
+    setActiveView('home');
+  };
+
+  const handleSearchInputChange = (value: string) => {
+    setSearchQuery(value);
+    if (isOnboardingProfile) {
+      setActiveView('profile');
+      return;
+    }
+    if (value.trim().length > 0 && activeView === 'profile') {
+      setActiveView('home');
+    }
+  };
+
+  const handleSaveProfile = async (updated: {
+    name: string;
+    phone: string;
+    age?: number;
+    gender: GenderOption;
+    favoriteCategories: string[];
+    preferredCity: string;
+    preferredLanguage: string;
+    preferredFormat: string;
+  }) => {
+    if (!user) return;
+
+    const wasOnboarding = !isProfileComplete(user);
+    const nextUser: UserProfile = {
+      ...user,
+      name: updated.name,
+      phone: updated.phone,
+      age: updated.age,
+      gender: updated.gender,
+      favoriteCategories: updated.favoriteCategories,
+      preferredCity: updated.preferredCity,
+      preferredLanguage: updated.preferredLanguage,
+      preferredFormat: updated.preferredFormat,
+    };
+
+    setUser(nextUser);
+    setSelectedCity(updated.preferredCity);
+
+    if (auth.currentUser && updated.name !== user.name) {
+      await updateProfile(auth.currentUser, { displayName: updated.name }).catch(() => {});
+    }
+
+    if (user.uid && !user.emailVerified) {
+      savePendingProfile(user.uid, nextUser);
+      setProfileSyncedToFirebase(false);
+      return;
+    }
+
+    if (user.uid && user.emailVerified) {
+      try {
+        await upsertUserPrivateProfile(user.uid, {
+          name: updated.name,
+          email: user.email,
+          phone: updated.phone,
+          age: updated.age,
+          gender: updated.gender,
+          favoriteCategories: updated.favoriteCategories,
+          preferredCity: updated.preferredCity,
+          preferredLanguage: updated.preferredLanguage,
+          preferredFormat: updated.preferredFormat,
+          provider: user.provider === 'password' ? 'password' : 'google',
+        });
+        clearPendingProfile(user.uid);
+        setProfileSyncedToFirebase(true);
+        setProfileSyncError(null);
+        setProfileCheckedUid(user.uid);
+        if (wasOnboarding && isProfileComplete(nextUser)) {
+          setActiveView('home');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (err) {
+        setProfileSyncedToFirebase(false);
+        setProfileSyncError(
+          'Failed to write profile to Firebase Firestore. Check your firestore.rules in cinnova-001.'
+        );
+        throw err;
+      }
+    }
+  };
+
   const handleToggleNotify = async (movieId: string) => {
     if (!user || !authReady) {
       setPendingNotifyMovieId(movieId);
@@ -322,9 +586,10 @@ export default function App() {
     }
 
     const exists = notifiedIds.includes(movieId);
-    setNotifiedIds((prev) =>
-      exists ? prev.filter((id) => id !== movieId) : [...prev, movieId]
-    );
+    const nextIds = exists
+      ? notifiedIds.filter((id) => id !== movieId)
+      : [...notifiedIds, movieId];
+    setNotifiedIds(nextIds);
 
     if (user.uid && user.emailVerified) {
       try {
@@ -426,6 +691,11 @@ export default function App() {
 
   const handleProceedToPayment = (payload: PendingCheckoutPayload) => {
     if (!canBook) {
+      if (needsProfileCompletion && user?.emailVerified) {
+        setSelectedMovie(null);
+        setActiveView('profile');
+        return;
+      }
       openSignInWithPrompt(
         needsEmailVerification
           ? 'Verify your email address to book tickets.'
@@ -443,9 +713,17 @@ export default function App() {
 
     setBookings((prev) => [booking, ...prev]);
 
-    saveUserBooking(user.uid, booking).catch((err) => {
-      console.error('Failed to save booking to Firestore:', err);
-    });
+    setBookingSyncError(null);
+    saveUserBooking(user.uid, booking)
+      .then(() => {
+        setBookingSyncError(null);
+      })
+      .catch((err) => {
+        console.error('Failed to save booking to Firestore:', err);
+        setBookingSyncError(
+          'Ticket booked locally, but Firebase Firestore rejected the save. Ensure firestore.rules are published in cinnova-001.'
+        );
+      });
 
     if (pendingCheckout) {
       const dateOptionsMap: Record<string, string> = {
@@ -545,7 +823,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-[#F4F7FC] text-[#070910] transition-colors duration-200 dark:bg-[#070910] dark:text-slate-100">
       <Header
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchInputChange}
         selectedCity={selectedCity}
         onOpenCityModal={() => setIsCityModalOpen(true)}
         user={user}
@@ -554,50 +832,98 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={() => setIsDark((prev) => !prev)}
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        activeView={isOnboardingProfile || (activeView === 'profile' && user) ? 'profile' : 'home'}
+        isOnboardingProfile={isOnboardingProfile}
+        onSelectTab={handleSelectNavTab}
+        onOpenProfile={() => {
+          if (user) {
+            setActiveView('profile');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            openSignInWithPrompt('Sign in to view and manage your CinNova profile.');
+          }
+        }}
         bookingsCount={bookings.length}
         onOpenMyBookings={() => {
-          if (user) setIsMyTicketsOpen(true);
+          if (user && !isOnboardingProfile) setIsMyTicketsOpen(true);
         }}
         onOpenMentorGuide={() => setIsMentorGuideOpen(true)}
       />
 
       <main className="flex-1">
-        <FloatingAdCarousel
-          slides={activeAdSlides}
-          isSignedIn={Boolean(user)}
-          notifiedIds={user ? notifiedIds : []}
-          onToggleNotify={handleToggleNotify}
-          onSelectSlide={handleSelectAdSlide}
-        />
+        {(isOnboardingProfile || activeView === 'profile') && user ? (
+          <ProfilePage
+            user={user}
+            selectedCity={selectedCity}
+            bookingsCount={bookings.length}
+            calendarAlertsCount={notifiedIds.length}
+            isOnboarding={isOnboardingProfile}
+            isSyncedToFirebase={profileSyncedToFirebase}
+            profileSyncError={profileSyncError}
+            onSaveProfile={handleSaveProfile}
+            onBackToMovies={(filterGenre) => {
+              if (isOnboardingProfile) return;
+              if (filterGenre) {
+                setActiveTab('all');
+                setSelectedGenre(filterGenre);
+              }
+              setActiveView('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOpenMyBookings={() => {
+              if (!isOnboardingProfile) setIsMyTicketsOpen(true);
+            }}
+            onOpenMentorGuide={() => setIsMentorGuideOpen(true)}
+            onOpenVerifyModal={() =>
+              openSignInWithPrompt('Verify your email to sync your profile with Firestore.')
+            }
+            onSignOut={handleSignOut}
+          />
+        ) : (
+          <>
+            <FloatingAdCarousel
+              slides={activeAdSlides}
+              isSignedIn={Boolean(user)}
+              notifiedIds={user ? notifiedIds : []}
+              onToggleNotify={handleToggleNotify}
+              onSelectSlide={handleSelectAdSlide}
+            />
 
-        <MovieGrid
-          movies={filteredMovies}
-          activeTab={activeTab}
-          selectedCity={selectedCity}
-          searchQuery={searchQuery}
-          selectedGenre={selectedGenre}
-          genres={availableGenres}
-          isLoading={isLoadingCatalog || isSearchingMovies}
-          dataSource={dataSource}
-          onSelectGenre={setSelectedGenre}
-          onSelectMovie={setSelectedMovie}
-          isSignedIn={canBook}
-          notifiedIds={user ? notifiedIds : []}
-          onToggleNotify={handleToggleNotify}
-          onResetFilters={() => {
-            setActiveTab('all');
-            setSelectedGenre('All');
-            setSearchQuery('');
-          }}
-        />
+            <MovieGrid
+              movies={filteredMovies}
+              activeTab={activeTab}
+              selectedCity={selectedCity}
+              searchQuery={searchQuery}
+              selectedGenre={selectedGenre}
+              genres={availableGenres}
+              isLoading={isLoadingCatalog || isSearchingMovies}
+              dataSource={dataSource}
+              onSelectGenre={setSelectedGenre}
+              onSelectMovie={setSelectedMovie}
+              isSignedIn={canBook}
+              notifiedIds={user ? notifiedIds : []}
+              onToggleNotify={handleToggleNotify}
+              onResetFilters={() => {
+                setActiveTab('all');
+                setSelectedGenre('All');
+                setSearchQuery('');
+              }}
+            />
+          </>
+        )}
       </main>
 
       <Footer
         isSignedIn={Boolean(user)}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectNavTab}
+        onOpenProfile={() => {
+          if (user) {
+            setActiveView('profile');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
         onOpenMyBookings={() => {
-          if (user) setIsMyTicketsOpen(true);
+          if (user && !isOnboardingProfile) setIsMyTicketsOpen(true);
         }}
         onOpenMentorGuide={() => setIsMentorGuideOpen(true)}
         onOpenCityModal={() => setIsCityModalOpen(true)}
@@ -611,7 +937,14 @@ export default function App() {
         needsEmailVerification={needsEmailVerification}
         isNotified={Boolean(user && selectedMovie && notifiedIds.includes(selectedMovie.id))}
         onToggleNotify={handleToggleNotify}
-        onRequireAuth={(msg) => openSignInWithPrompt(msg)}
+        onRequireAuth={(msg) => {
+          if (needsProfileCompletion && user?.emailVerified) {
+            setSelectedMovie(null);
+            setActiveView('profile');
+            return;
+          }
+          openSignInWithPrompt(msg);
+        }}
         onClose={() => setSelectedMovie(null)}
         onProceedToPayment={handleProceedToPayment}
       />
@@ -628,13 +961,19 @@ export default function App() {
         selectedCity={selectedCity}
         onSelectCity={(city) => {
           setSelectedCity(city);
-          if (user?.uid && user.emailVerified) {
+          setUser((prev) => (prev ? { ...prev, preferredCity: city } : prev));
+          if (user?.uid && user.emailVerified && isProfileComplete(user)) {
             upsertUserPrivateProfile(user.uid, {
               name: user.name,
               email: user.email,
               phone: user.phone,
+              age: user.age,
+              gender: user.gender,
+              favoriteCategories: user.favoriteCategories,
               preferredCity: city,
-              provider: user.provider || 'google',
+              preferredLanguage: user.preferredLanguage,
+              preferredFormat: user.preferredFormat,
+              provider: user.provider === 'password' ? 'password' : 'google',
             }).catch(() => {});
           }
         }}
@@ -663,6 +1002,7 @@ export default function App() {
         bookings={bookings}
         calendarMovies={calendarMovies}
         isSignedIn={Boolean(user)}
+        bookingSyncError={bookingSyncError}
         onRefresh={handleRefreshTickets}
         onClearBookings={handleClearBookings}
         onRemoveBooking={handleRemoveBooking}

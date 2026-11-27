@@ -40,14 +40,27 @@ service cloud.firestore {
     // --- Entity Validation Blueprints ---
     function isValidUserPrivateProfile(data, userId) {
       return data.keys().hasAll(['uid', 'name', 'email', 'preferredCity', 'provider', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'name', 'email', 'phone', 'preferredCity', 'provider', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'name', 'email', 'phone', 'age', 'gender',
+          'favoriteCategories', 'preferredCity', 'preferredLanguage',
+          'preferredFormat', 'provider', 'createdAt', 'updatedAt'
+        ])
         && data.uid == request.auth.uid
         && data.uid == userId
         && isValidId(data.uid)
         && isBoundedString(data.name, 1, 80)
         && isBoundedString(data.email, 3, 160)
         && (!('phone' in data) || isBoundedString(data.phone, 0, 24))
+        && (!('age' in data) || (data.age is int && data.age >= 10 && data.age <= 120))
+        && (!('gender' in data) || (data.gender is string && data.gender.size() <= 32 && data.gender in ['', 'Female', 'Male', 'Non-binary', 'Prefer not to say']))
+        && (!('favoriteCategories' in data) || (
+          data.favoriteCategories is list
+          && data.favoriteCategories.size() <= 8
+          && (data.favoriteCategories.size() == 0 || (data.favoriteCategories[0] is string && data.favoriteCategories[0].size() >= 1 && data.favoriteCategories[0].size() <= 32))
+        ))
         && isBoundedString(data.preferredCity, 1, 60)
+        && (!('preferredLanguage' in data) || isBoundedString(data.preferredLanguage, 0, 40))
+        && (!('preferredFormat' in data) || isBoundedString(data.preferredFormat, 0, 40))
         && data.provider in ['google', 'password']
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -139,7 +152,10 @@ service cloud.firestore {
           && incoming().provider == existing().provider
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
-          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'preferredCity', 'updatedAt']);
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'phone', 'age', 'gender', 'favoriteCategories',
+            'preferredCity', 'preferredLanguage', 'preferredFormat', 'updatedAt'
+          ]);
         allow delete: if false;
       }
 

@@ -4,6 +4,7 @@ import { CategoryTab } from '../types/cinema';
 interface FooterProps {
   isSignedIn: boolean;
   onSelectTab: (tab: CategoryTab) => void;
+  onOpenProfile: () => void;
   onOpenMyBookings: () => void;
   onOpenMentorGuide: () => void;
   onOpenCityModal: () => void;
@@ -12,6 +13,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({
   isSignedIn,
   onSelectTab,
+  onOpenProfile,
   onOpenMyBookings,
   onOpenMentorGuide,
   onOpenCityModal,
@@ -85,13 +87,25 @@ export const Footer: React.FC<FooterProps> = ({
               Select City
             </button>
             {isSignedIn && (
-              <button
-                type="button"
-                onClick={onOpenMyBookings}
-                className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
-              >
-                My Bookings
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenProfile();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
+                >
+                  My Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenMyBookings}
+                  className="transition-colors hover:text-blue-600 whitespace-nowrap dark:hover:text-lime-400"
+                >
+                  My Bookings
+                </button>
+              </>
             )}
             <button
               type="button"

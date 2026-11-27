@@ -17,6 +17,7 @@ interface MyTicketsModalProps {
   bookings: BookingRecord[];
   calendarMovies: Movie[];
   isSignedIn: boolean;
+  bookingSyncError?: string | null;
   onRefresh: () => void;
   onClearBookings: () => void;
   onRemoveBooking: (bookingId: string) => void;
@@ -30,6 +31,7 @@ export const MyTicketsModal: React.FC<MyTicketsModalProps> = ({
   bookings,
   calendarMovies,
   isSignedIn,
+  bookingSyncError,
   onRefresh,
   onClearBookings,
   onRemoveBooking,
@@ -74,7 +76,7 @@ export const MyTicketsModal: React.FC<MyTicketsModalProps> = ({
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {justRefreshed
                 ? 'Bookings synced and up to date'
-                : 'Present your QR pass at the auditorium entrance'}
+                : 'Synced with Firebase Firestore (cinnova-001) · Present QR at entrance'}
             </p>
           </div>
 
@@ -150,6 +152,11 @@ export const MyTicketsModal: React.FC<MyTicketsModalProps> = ({
 
         {/* Body */}
         <div className="overflow-y-auto p-5 sm:p-6">
+          {bookingSyncError && (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-300">
+              {bookingSyncError}
+            </div>
+          )}
           {activeView === 'tickets' ? (
             bookings.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-[#F4F7FC]/60 px-6 py-12 text-center dark:border-slate-800 dark:bg-[#070910]/60">

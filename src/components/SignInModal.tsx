@@ -16,6 +16,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signOut,
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
@@ -29,11 +30,15 @@ interface SignInModalProps {
   onAuthComplete: (profile: UserProfile) => void;
 }
 
-function mapFirebaseAuthError(err: unknown): string {
+function mapFirebaseAuthError(err: unknown, method: 'google' | 'password' = 'password'): string {
   const code = (err as { code?: string })?.code || '';
   switch (code) {
     case 'auth/operation-not-allowed':
-      return 'Email/Password sign-in is disabled in Firebase Console right now. Click "Continue with Google" above for instant sign-in, or enable Email/Password under Firebase Console → Authentication → Sign-in method.';
+      return method === 'google'
+        ? 'Google Sign-In is disabled in Firebase Console for cinnova-001. Enable Google under Authentication → Sign-in method, or use Email & Password below.'
+        : 'Email/Password sign-in is disabled in Firebase Console for cinnova-001. Click "Continue with Google" above, or enable Email/Password under Authentication → Sign-in method.';
+    case 'auth/configuration-not-found':
+      return 'Firebase Authentication is not initialized in project cinnova-001 yet. Open Firebase Console → Authentication and click Get started.';
     case 'auth/unauthorized-domain': {
       const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
       return `This domain (${host}) is not authorized in Firebase Auth yet. Add it under Firebase Console → Authentication → Settings → Authorized domains.`;
@@ -44,6 +49,8 @@ function mapFirebaseAuthError(err: unknown): string {
     case 'auth/wrong-password':
     case 'auth/user-not-found':
       return 'Invalid email or password. Please check your credentials and try again.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please try another account.';
     case 'auth/weak-password':
       return 'Password must be at least 6 characters long.';
     case 'auth/invalid-email':
@@ -57,6 +64,8 @@ function mapFirebaseAuthError(err: unknown): string {
       return 'An account already exists with this email using a different sign-in method. Try Continue with Google.';
     case 'auth/network-request-failed':
       return 'Network error while connecting to Firebase Auth. Please check your connection and try again.';
+    case 'auth/internal-error':
+      return 'Firebase Auth encountered a configuration error. Verify your sign-in provider and authorized domains in Firebase Console.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Please wait a moment and try again.';
     default: {
@@ -90,19 +99,18 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setError('');
-    setInfoMsg('');
     setPassword('');
     setShowPassword(false);
     setIsSubmitting(false);
 
-    const current = auth.currentUser;
-    if (current && !current.emailVerified) {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
       setNeedsVerification(true);
       setInfoMsg(
-        `Signed in as ${current.email || 'your account'}. Verify your email link to sync bookings & calendar alerts to Firestore.`
+        `Verification link sent to ${auth.currentUser.email || 'your email'}. Open the link in your inbox, then click "I've Verified — Sync Account" to enable Firebase sync.`
       );
     } else {
       setNeedsVerification(false);
+      setInfoMsg('');
     }
   }, [isOpen]);
 
@@ -127,7 +135,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
       onAuthComplete(profile);
       onClose();
     } catch (err) {
-      setError(mapFirebaseAuthError(err));
+      setError(mapFirebaseAuthError(err, 'google'));
     } finally {
       setIsSubmitting(false);
     }
@@ -189,13 +197,13 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           emailVerified: cred.user.emailVerified,
         };
         onAuthComplete(profile);
-        if (!cred.user.emailVerified) {
+        if (cred.user.emailVerified) {
+          onClose();
+        } else {
           setNeedsVerification(true);
           setInfoMsg(
-            `Account created! We sent a verification link to ${profile.email}. Verify your email to sync bookings & calendar to Firestore.`
+            `Account created! A verification link was sent to ${cleanEmail}. Click it in your inbox, then press "I've Verified — Sync Account" so your profile and bookings save to Firebase.`
           );
-        } else {
-          onClose();
         }
       } else {
         const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
@@ -204,7 +212,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           uid: fbUser.uid,
           name: fbUser.displayName || cleanEmail.split('@')[0],
           email: fbUser.email || cleanEmail,
-          phone: phone.trim().slice(0, 24),
+          phone: fbUser.phoneNumber || '',
           preferredCity: selectedCity,
           provider: 'password',
           emailVerified: fbUser.emailVerified,
@@ -215,12 +223,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({
         } else {
           setNeedsVerification(true);
           setInfoMsg(
-            `Signed in as ${profile.email}. Please verify your email address so Firestore can store your profile and bookings.`
+            `Signed in as ${fbUser.email || cleanEmail}. Please verify your email link so your profile and bookings sync with Firebase.`
           );
         }
       }
     } catch (err) {
-      setError(mapFirebaseAuthError(err));
+      setError(mapFirebaseAuthError(err, 'password'));
     } finally {
       setIsSubmitting(false);
     }
@@ -238,7 +246,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           uid: fbUser.uid,
           name: fbUser.displayName || name.trim() || fbUser.email?.split('@')[0] || 'CinNova Member',
           email: fbUser.email || email.trim(),
-          phone: phone.trim().slice(0, 24),
+          phone: fbUser.phoneNumber || phone.trim().slice(0, 24),
           preferredCity: selectedCity,
           provider: 'password',
           emailVerified: true,
@@ -280,7 +288,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-blue-500/25 dark:bg-[#0D111C]"
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-blue-500/25 dark:bg-[#0D111C]"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
           <div>
@@ -334,10 +342,22 @@ export const SignInModal: React.FC<SignInModalProps> = ({
               </button>
               <button
                 type="button"
+                onClick={async () => {
+                  await signOut(auth).catch(() => {});
+                  setNeedsVerification(false);
+                  setError('');
+                  setInfoMsg('');
+                }}
+                className="h-9 w-full text-xs font-medium text-blue-600 hover:underline dark:text-lime-400"
+              >
+                Use a different account
+              </button>
+              <button
+                type="button"
                 onClick={onClose}
                 className="h-9 w-full text-xs font-medium text-slate-500 hover:text-[#070910] dark:text-slate-400 dark:hover:text-white"
               >
-                Continue browsing for now
+                Complete profile first (verify email later)
               </button>
             </div>
           </div>
@@ -414,7 +434,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
               {mode === 'signup' && (
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">

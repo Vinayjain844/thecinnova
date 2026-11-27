@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -12,9 +13,16 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { BookingRecord, Movie, UserProfile } from '../types/cinema';
+import { BookingRecord, GenderOption, Movie, UserProfile } from '../types/cinema';
 
 const ID_PATTERN = /^[a-zA-Z0-9_\-]+$/;
+const VALID_GENDERS = new Set<GenderOption>([
+  '',
+  'Female',
+  'Male',
+  'Non-binary',
+  'Prefer not to say',
+]);
 const pendingProfileUpserts = new Map<string, Promise<void>>();
 
 function clampStr(value: string | undefined, maxLen: number, fallback = ''): string {
@@ -26,6 +34,33 @@ function clampStr(value: string | undefined, maxLen: number, fallback = ''): str
 function sanitizeId(value: string, fallbackPrefix: string): string {
   const cleaned = value.trim().replace(/[^a-zA-Z0-9_\-]/g, '-').slice(0, 128);
   return ID_PATTERN.test(cleaned) ? cleaned : `${fallbackPrefix}-${Date.now()}`;
+}
+
+function normalizeGender(value: unknown): GenderOption {
+  if (typeof value === 'string' && VALID_GENDERS.has(value as GenderOption)) {
+    return value as GenderOption;
+  }
+  return '';
+}
+
+function normalizeAge(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const rounded = Math.trunc(value);
+  return rounded >= 10 && rounded <= 120 ? rounded : undefined;
+}
+
+function normalizeCategories(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const unique: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const clean = item.trim().slice(0, 32);
+    if (clean.length > 0 && !unique.includes(clean)) {
+      unique.push(clean);
+      if (unique.length >= 8) break;
+    }
+  }
+  return unique;
 }
 
 export interface CalendarAlertItem {
@@ -49,7 +84,14 @@ export async function loadUserPrivateProfile(uid: string): Promise<UserProfile |
       name: String(data.name || ''),
       email: String(data.email || ''),
       phone: String(data.phone || ''),
+      age: normalizeAge(data.age),
+      gender: normalizeGender(data.gender),
+      favoriteCategories: normalizeCategories(data.favoriteCategories),
       preferredCity: typeof data.preferredCity === 'string' ? data.preferredCity : undefined,
+      preferredLanguage:
+        typeof data.preferredLanguage === 'string' ? data.preferredLanguage : undefined,
+      preferredFormat:
+        typeof data.preferredFormat === 'string' ? data.preferredFormat : undefined,
       provider: data.provider === 'password' ? 'password' : 'google',
       emailVerified: Boolean(auth.currentUser?.emailVerified),
     };
@@ -64,7 +106,12 @@ export async function upsertUserPrivateProfile(
     name: string;
     email: string;
     phone?: string;
+    age?: number;
+    gender?: GenderOption;
+    favoriteCategories?: string[];
     preferredCity: string;
+    preferredLanguage?: string;
+    preferredFormat?: string;
     provider: 'google' | 'password';
   }
 ): Promise<void> {
@@ -78,19 +125,43 @@ export async function upsertUserPrivateProfile(
 
   const path = `users/${safeUid}/private/profile`;
   const ref = doc(db, 'users', safeUid, 'private', 'profile');
+  const cleanAge = normalizeAge(profile.age);
+  const cleanGender = normalizeGender(profile.gender);
+  const cleanCategories = normalizeCategories(profile.favoriteCategories);
+  const cleanLanguage = (profile.preferredLanguage ?? '').trim().slice(0, 40);
+  const cleanFormat = (profile.preferredFormat ?? '').trim().slice(0, 40);
 
   const task = (async () => {
     try {
       const existing = await getDoc(ref);
       if (existing.exists()) {
-        await updateDoc(ref, {
+        const existingData = existing.data();
+        const updatePayload: Record<string, unknown> = {
           name: clampStr(profile.name, 80, 'CinNova Member'),
           phone: (profile.phone ?? '').trim().slice(0, 24),
           preferredCity: clampStr(profile.preferredCity, 60, 'Gwalior'),
           updatedAt: serverTimestamp(),
-        });
+        };
+
+        if (profile.age !== undefined || 'age' in existingData) {
+          updatePayload.age = cleanAge !== undefined ? cleanAge : deleteField();
+        }
+        if (profile.gender !== undefined) {
+          updatePayload.gender = cleanGender;
+        }
+        if (profile.favoriteCategories !== undefined) {
+          updatePayload.favoriteCategories = cleanCategories;
+        }
+        if (profile.preferredLanguage !== undefined) {
+          updatePayload.preferredLanguage = cleanLanguage;
+        }
+        if (profile.preferredFormat !== undefined) {
+          updatePayload.preferredFormat = cleanFormat;
+        }
+
+        await updateDoc(ref, updatePayload);
       } else {
-        await setDoc(ref, {
+        const createPayload: Record<string, unknown> = {
           uid: safeUid,
           name: clampStr(profile.name, 80, 'CinNova Member'),
           email: clampStr(profile.email, 160, 'user@cinnova.app'),
@@ -99,7 +170,25 @@ export async function upsertUserPrivateProfile(
           provider: profile.provider,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        });
+        };
+
+        if (cleanAge !== undefined) {
+          createPayload.age = cleanAge;
+        }
+        if (cleanGender) {
+          createPayload.gender = cleanGender;
+        }
+        if (cleanCategories.length > 0) {
+          createPayload.favoriteCategories = cleanCategories;
+        }
+        if (cleanLanguage) {
+          createPayload.preferredLanguage = cleanLanguage;
+        }
+        if (cleanFormat) {
+          createPayload.preferredFormat = cleanFormat;
+        }
+
+        await setDoc(ref, createPayload);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);

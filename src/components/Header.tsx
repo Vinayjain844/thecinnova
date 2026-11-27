@@ -24,7 +24,10 @@ interface HeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
   activeTab: CategoryTab;
+  activeView: 'home' | 'profile';
+  isOnboardingProfile?: boolean;
   onSelectTab: (tab: CategoryTab) => void;
+  onOpenProfile: () => void;
   bookingsCount: number;
   onOpenMyBookings: () => void;
   onOpenMentorGuide: () => void;
@@ -46,7 +49,10 @@ export const Header: React.FC<HeaderProps> = ({
   isDark,
   onToggleTheme,
   activeTab,
+  activeView,
+  isOnboardingProfile = false,
   onSelectTab,
+  onOpenProfile,
   bookingsCount,
   onOpenMyBookings,
   onOpenMentorGuide,
@@ -140,8 +146,14 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   type="button"
-                  onClick={onOpenMyBookings}
-                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#070910] transition-colors hover:border-blue-400 hover:bg-blue-50/50 whitespace-nowrap dark:border-blue-500/30 dark:bg-[#0D111C] dark:text-slate-100 dark:hover:border-lime-400/60 dark:hover:bg-[#131926]"
+                  onClick={onOpenProfile}
+                  aria-label="Open profile page"
+                  title="Open profile page"
+                  className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors whitespace-nowrap ${
+                    activeView === 'profile'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-lime-400 dark:bg-lime-400/15 dark:text-lime-300'
+                      : 'border-slate-200 bg-white text-[#070910] hover:border-blue-400 hover:bg-blue-50/50 dark:border-blue-500/30 dark:bg-[#0D111C] dark:text-slate-100 dark:hover:border-lime-400/60 dark:hover:bg-[#131926]'
+                  }`}
                 >
                   <User className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" />
                   <span className="max-w-[90px] truncate">{user.name.split(' ')[0]}</span>
@@ -212,43 +224,69 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Movie categories"
             className="no-scrollbar flex items-center gap-6 overflow-x-auto py-2.5 sm:gap-8"
           >
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectTab(item.id)}
-                  className={`relative py-1 text-sm whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:text-blue-600 ${
-                    isActive
-                      ? 'font-semibold text-blue-600 dark:text-lime-400'
-                      : 'font-medium text-slate-600 hover:text-[#070910] dark:text-slate-400 dark:hover:text-slate-100'
-                  }`}
-                >
-                  {item.label}
-                  {isActive && (
-                    <span className="absolute inset-x-0 -bottom-2.5 h-0.5 rounded-full bg-blue-600 dark:bg-lime-400" />
-                  )}
-                </button>
-              );
-            })}
+            {isOnboardingProfile ? (
+              <span className="py-1 text-xs font-semibold text-blue-600 whitespace-nowrap dark:text-lime-400">
+                Onboarding: Complete your required profile details to browse &amp; book movies
+              </span>
+            ) : (
+              navItems.map((item) => {
+                const isActive = activeView === 'home' && activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelectTab(item.id)}
+                    className={`relative py-1 text-sm whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:text-blue-600 ${
+                      isActive
+                        ? 'font-semibold text-blue-600 dark:text-lime-400'
+                        : 'font-medium text-slate-600 hover:text-[#070910] dark:text-slate-400 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    {item.label}
+                    {isActive && (
+                      <span className="absolute inset-x-0 -bottom-2.5 h-0.5 rounded-full bg-blue-600 dark:bg-lime-400" />
+                    )}
+                  </button>
+                );
+              })
+            )}
           </nav>
 
           <div className="flex shrink-0 items-center gap-4">
             {user && (
-              <button
-                type="button"
-                onClick={onOpenMyBookings}
-                className="flex shrink-0 items-center gap-1.5 py-2 text-xs font-medium text-slate-700 transition-colors hover:text-blue-600 whitespace-nowrap dark:text-slate-200 dark:hover:text-lime-400"
-              >
-                <Ticket className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" aria-hidden="true" />
-                <span>My Bookings</span>
-                {bookingsCount > 0 && (
-                  <span className="font-mono-tabular text-xs font-semibold text-blue-600 dark:text-lime-400">
-                    ({bookingsCount})
-                  </span>
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className={`relative flex shrink-0 items-center gap-1.5 py-2 text-xs transition-colors whitespace-nowrap ${
+                    activeView === 'profile'
+                      ? 'font-semibold text-blue-600 dark:text-lime-400'
+                      : 'font-medium text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-lime-400'
+                  }`}
+                >
+                  <User className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" aria-hidden="true" />
+                  <span>Profile</span>
+                  {activeView === 'profile' && (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-blue-600 dark:bg-lime-400" />
+                  )}
+                </button>
+
+                {!isOnboardingProfile && (
+                  <button
+                    type="button"
+                    onClick={onOpenMyBookings}
+                    className="flex shrink-0 items-center gap-1.5 py-2 text-xs font-medium text-slate-700 transition-colors hover:text-blue-600 whitespace-nowrap dark:text-slate-200 dark:hover:text-lime-400"
+                  >
+                    <Ticket className="h-3.5 w-3.5 text-blue-600 dark:text-lime-400" aria-hidden="true" />
+                    <span>My Bookings</span>
+                    {bookingsCount > 0 && (
+                      <span className="font-mono-tabular text-xs font-semibold text-blue-600 dark:text-lime-400">
+                        ({bookingsCount})
+                      </span>
+                    )}
+                  </button>
                 )}
-              </button>
+              </>
             )}
 
             <button

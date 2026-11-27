@@ -60,7 +60,7 @@ export const SandboxPaymentModal: React.FC<SandboxPaymentModalProps> = ({
     if (user?.name) setCardName(user.name);
   }, [checkout, user?.email, user?.name, user?.phone]);
 
-  if (!checkout || !user || !user.emailVerified) return null;
+  if (!checkout || !user) return null;
 
   const orderId = `sbx_CN${checkout.movie.id.slice(0, 4).toUpperCase()}8492`;
 
@@ -89,8 +89,8 @@ export const SandboxPaymentModal: React.FC<SandboxPaymentModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
-    if (!user || !auth.currentUser || !auth.currentUser.emailVerified) {
-      setErrorMsg('Please sign in with a verified account before completing payment.');
+    if (!user || !auth.currentUser) {
+      setErrorMsg('Please sign in before completing payment.');
       return;
     }
 

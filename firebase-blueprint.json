@@ -31,11 +31,38 @@
           "minLength": 0,
           "maxLength": 24
         },
+        "age": {
+          "type": "integer",
+          "description": "User age in years (10-120)."
+        },
+        "gender": {
+          "type": "string",
+          "description": "User gender selection.",
+          "enum": ["", "Female", "Male", "Non-binary", "Prefer not to say"],
+          "minLength": 0,
+          "maxLength": 32
+        },
+        "favoriteCategories": {
+          "type": "array",
+          "description": "Preferred movie genres (max 8)."
+        },
         "preferredCity": {
           "type": "string",
           "description": "Selected cinema city.",
           "minLength": 1,
           "maxLength": 60
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "Preferred movie audio language.",
+          "minLength": 0,
+          "maxLength": 40
+        },
+        "preferredFormat": {
+          "type": "string",
+          "description": "Preferred theatre screen format.",
+          "minLength": 0,
+          "maxLength": 40
         },
         "provider": {
           "type": "string",

@@ -115,12 +115,39 @@ export interface BookingRecord {
   customerEmail: string;
 }
 
+export type GenderOption = '' | 'Female' | 'Male' | 'Non-binary' | 'Prefer not to say';
+
 export interface UserProfile {
   uid?: string;
   name: string;
   email: string;
   phone: string;
+  age?: number;
+  gender?: GenderOption;
+  favoriteCategories?: string[];
   preferredCity?: string;
+  preferredLanguage?: string;
+  preferredFormat?: string;
   provider?: 'google' | 'password';
   emailVerified?: boolean;
+}
+
+export function isProfileComplete(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  const hasName = Boolean(user.name && user.name.trim().length > 0);
+  const phoneDigits = (user.phone || '').replace(/\D/g, '');
+  const hasPhone = phoneDigits.length >= 7;
+  const hasAge =
+    typeof user.age === 'number' &&
+    Number.isInteger(user.age) &&
+    user.age >= 10 &&
+    user.age <= 120;
+  const hasGender = Boolean(
+    user.gender &&
+      (user.gender === 'Female' ||
+        user.gender === 'Male' ||
+        user.gender === 'Non-binary' ||
+        user.gender === 'Prefer not to say')
+  );
+  return hasName && hasPhone && hasAge && hasGender;
 }
