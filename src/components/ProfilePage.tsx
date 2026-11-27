@@ -330,7 +330,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   />
                   <span>
                     {user.provider === 'google' ? 'Google Sign-In' : 'Email Account'} ·{' '}
-                    {user.emailVerified ? 'Verified' : 'Unverified'}
+                    {user.emailVerified ? 'Verified' : 'Unverified'} · Role:{' '}
+                    <strong className="text-blue-600 uppercase dark:text-lime-400">
+                      {user.role || 'user'}
+                    </strong>
                   </span>
                 </p>
               </div>

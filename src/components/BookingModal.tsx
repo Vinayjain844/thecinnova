@@ -13,7 +13,21 @@ import {
   X,
 } from 'lucide-react';
 import { getTheatresForCity } from '../data/movies';
-import { Movie, SeatItem, SeatTierName, ShowtimeSlot, Theatre } from '../types/cinema';
+import {
+  AUDITORIUM_ROWS_CONFIG,
+  AUDITORIUM_SEATS_PER_ROW,
+  buildShowKey,
+  DEFAULT_PLATFORM_CATALOG,
+  Movie,
+  PlatformCatalogConfig,
+  SeatItem,
+  seededSoldSeatsForShow,
+  SHOW_DATE_OPTIONS,
+  ShowtimeSeatState,
+  ShowtimeSlot,
+  Theatre,
+} from '../types/cinema';
+import { subscribeShowtimeSeats, syncUserSeatLocks } from '../services/rbacService';
 import { PosterArtwork } from './PosterArtwork';
 
 export interface PendingCheckoutPayload {
@@ -33,6 +47,9 @@ interface BookingModalProps {
   movie: Movie | null;
   city: string;
   soldSeatMap: Record<string, string[]>;
+  catalogConfig?: PlatformCatalogConfig;
+  currentUserUid?: string;
+  currentUserName?: string;
   canBook: boolean;
   needsEmailVerification: boolean;
   isNotified: boolean;
@@ -42,51 +59,15 @@ interface BookingModalProps {
   onProceedToPayment: (payload: PendingCheckoutPayload) => void;
 }
 
-const DATE_OPTIONS = [
-  { id: 'today', day: 'Today', dateNum: '25 Nov', label: 'Wed, 25 Nov' },
-  { id: 'tomorrow', day: 'Thu', dateNum: '26 Nov', label: 'Thu, 26 Nov' },
-  { id: 'fri', day: 'Fri', dateNum: '27 Nov', label: 'Fri, 27 Nov' },
-  { id: 'sat', day: 'Sat', dateNum: '28 Nov', label: 'Sat, 28 Nov' },
-];
-
-const ROWS_CONFIG: { row: string; tier: SeatTierName; basePrice: number }[] = [
-  { row: 'A', tier: 'Royal Recliner', basePrice: 550 },
-  { row: 'B', tier: 'Royal Recliner', basePrice: 550 },
-  { row: 'C', tier: 'Prime Executive', basePrice: 320 },
-  { row: 'D', tier: 'Prime Executive', basePrice: 320 },
-  { row: 'E', tier: 'Prime Executive', basePrice: 320 },
-  { row: 'F', tier: 'Prime Executive', basePrice: 320 },
-  { row: 'G', tier: 'Classic', basePrice: 190 },
-  { row: 'H', tier: 'Classic', basePrice: 190 },
-  { row: 'J', tier: 'Classic', basePrice: 190 },
-];
-
-const SEATS_PER_ROW = 14;
 const MAX_SELECTABLE_SEATS = 8;
-
-function seededSoldSeats(showKey: string): Set<string> {
-  let hash = 0;
-  for (let i = 0; i < showKey.length; i++) {
-    hash = (hash * 31 + showKey.charCodeAt(i)) >>> 0;
-  }
-  const sold = new Set<string>();
-  ROWS_CONFIG.forEach((rCfg, rIdx) => {
-    for (let num = 1; num <= SEATS_PER_ROW; num++) {
-      const code = `${rCfg.row}${num}`;
-      const val = (hash + rIdx * 17 + num * 29) % 100;
-      const centerBias = num >= 5 && num <= 10 ? 18 : 6;
-      if (val < centerBias) {
-        sold.add(code);
-      }
-    }
-  });
-  return sold;
-}
 
 export const BookingModal: React.FC<BookingModalProps> = ({
   movie,
   city,
   soldSeatMap,
+  catalogConfig = DEFAULT_PLATFORM_CATALOG,
+  currentUserUid,
+  currentUserName,
   canBook,
   needsEmailVerification,
   isNotified,
@@ -100,11 +81,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [selectedTheatre, setSelectedTheatre] = useState<Theatre | null>(null);
   const [selectedShowtime, setSelectedShowtime] = useState<ShowtimeSlot | null>(null);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [liveSeatState, setLiveSeatState] = useState<ShowtimeSeatState | null>(null);
   const [lockSecondsLeft, setLockSecondsLeft] = useState(300);
   const [seatLimitWarning, setSeatLimitWarning] = useState(false);
 
   const theatres = useMemo(() => getTheatresForCity(city), [city]);
-  const activeDate = DATE_OPTIONS[selectedDateIdx];
+  const activeDate = SHOW_DATE_OPTIONS[selectedDateIdx];
 
   useEffect(() => {
     setHydratedMovie(movie);
@@ -112,6 +94,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setSelectedTheatre(null);
     setSelectedShowtime(null);
     setSelectedSeatIds([]);
+    setLiveSeatState(null);
     setLockSecondsLeft(300);
     setSeatLimitWarning(false);
 
@@ -133,22 +116,24 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     };
   }, [movie?.id, movie?.tmdbId, city]);
 
+  const activeLockDuration = liveSeatState?.lockDurationSeconds ?? 300;
+
   useEffect(() => {
     if (selectedSeatIds.length === 0) {
-      setLockSecondsLeft(300);
+      setLockSecondsLeft(activeLockDuration);
       return;
     }
     const timer = window.setInterval(() => {
       setLockSecondsLeft((prev) => {
         if (prev <= 1) {
           setSelectedSeatIds([]);
-          return 300;
+          return activeLockDuration;
         }
         return prev - 1;
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [selectedSeatIds.length]);
+  }, [selectedSeatIds.length, activeLockDuration]);
 
   useEffect(() => {
     if (!canBook) {
@@ -162,26 +147,105 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const showKey =
     activeMovie && selectedTheatre && selectedShowtime
-      ? `${activeMovie.id}__${city}__${selectedTheatre.id}__${activeDate.id}__${selectedShowtime.id}`
+      ? buildShowKey(
+          activeMovie.id,
+          city,
+          selectedTheatre.id,
+          activeDate.id,
+          selectedShowtime.id
+        )
       : '';
 
-  const seatGrid = useMemo(() => {
-    if (!selectedShowtime || !showKey) return [];
-    const baseSold = seededSoldSeats(showKey);
-    const userSold = new Set(soldSeatMap[showKey] || []);
+  useEffect(() => {
+    if (!showKey || !activeMovie || !selectedTheatre || !selectedShowtime) {
+      setLiveSeatState(null);
+      return;
+    }
+    const unsub = subscribeShowtimeSeats(
+      {
+        showKey,
+        movieId: activeMovie.id,
+        city,
+        theatreId: selectedTheatre.id,
+        dateId: activeDate.id,
+        showtimeId: selectedShowtime.id,
+      },
+      setLiveSeatState
+    );
+    return () => unsub();
+  }, [showKey, activeMovie?.id, city, selectedTheatre?.id, activeDate.id, selectedShowtime?.id]);
 
-    return ROWS_CONFIG.map((rCfg) => {
-      const unitPrice = Math.round((rCfg.basePrice * selectedShowtime.priceMultiplier) / 10) * 10;
+  // Sync user's selected seats to Firestore real-time seat lock state
+  useEffect(() => {
+    if (!canBook || !currentUserUid || !showKey || !activeMovie || !selectedTheatre || !selectedShowtime) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      syncUserSeatLocks(
+        {
+          showKey,
+          movieId: activeMovie.id,
+          city,
+          theatreId: selectedTheatre.id,
+          dateId: activeDate.id,
+          showtimeId: selectedShowtime.id,
+        },
+        selectedSeatIds,
+        currentUserUid,
+        currentUserName || 'Guest'
+      );
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [
+    selectedSeatIds,
+    canBook,
+    currentUserUid,
+    currentUserName,
+    showKey,
+    activeMovie?.id,
+    city,
+    selectedTheatre?.id,
+    activeDate.id,
+    selectedShowtime?.id,
+  ]);
+
+  const seatGrid = useMemo(() => {
+    if (!selectedShowtime || !showKey || !activeMovie) return [];
+    const baseSold = seededSoldSeatsForShow(showKey);
+    const userSold = new Set(soldSeatMap[showKey] || []);
+    const liveSold = new Set(liveSeatState?.soldSeats || []);
+    const liveBlocked = new Set(liveSeatState?.blockedSeats || []);
+    const liveLocks = liveSeatState?.seatLocks || {};
+    const now = Date.now();
+    const movieMult = catalogConfig.moviePriceMultipliers[activeMovie.id] ?? 1;
+
+    return AUDITORIUM_ROWS_CONFIG.map((rCfg) => {
+      const baseTierPrice =
+        rCfg.tier === 'Royal Recliner'
+          ? catalogConfig.pricing.royalRecliner
+          : rCfg.tier === 'Prime Executive'
+          ? catalogConfig.pricing.primeExecutive
+          : catalogConfig.pricing.classic;
+      const unitPrice =
+        Math.round((baseTierPrice * selectedShowtime.priceMultiplier * movieMult) / 10) * 10;
+
       const seats: SeatItem[] = [];
-      for (let num = 1; num <= SEATS_PER_ROW; num++) {
+      for (let num = 1; num <= AUDITORIUM_SEATS_PER_ROW; num++) {
         const id = `${rCfg.row}${num}`;
+        const activeLock = liveLocks[id];
+        const lockedByOther = Boolean(
+          activeLock && activeLock.expiresAtMs > now && activeLock.uid !== currentUserUid
+        );
+
         let status: SeatItem['status'] = 'available';
-        if (baseSold.has(id) || userSold.has(id)) {
+        if (baseSold.has(id) || userSold.has(id) || liveSold.has(id)) {
           status = 'sold';
         } else if (
-          rCfg.row === 'D' &&
-          (num === 1 || num === 2) &&
-          selectedShowtime.availability === 'almost-full'
+          liveBlocked.has(id) ||
+          lockedByOther ||
+          (rCfg.row === 'D' &&
+            (num === 1 || num === 2) &&
+            selectedShowtime.availability === 'almost-full')
         ) {
           status = 'locked';
         }
@@ -200,16 +264,25 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         seats,
       };
     });
-  }, [selectedShowtime, showKey, soldSeatMap]);
+  }, [
+    selectedShowtime,
+    showKey,
+    soldSeatMap,
+    liveSeatState,
+    currentUserUid,
+    catalogConfig,
+    activeMovie,
+  ]);
 
   if (!activeMovie) return null;
 
   const flatSeats = seatGrid.flatMap((r) => r.seats);
   const selectedSeatObjects = flatSeats.filter((s) => selectedSeatIds.includes(s.id));
   const ticketSubtotal = selectedSeatObjects.reduce((sum, s) => sum + s.price, 0);
-  const convenienceFee = selectedSeatObjects.length * 35;
-  const gst = Math.round(convenienceFee * 0.18);
+  const convenienceFee = selectedSeatObjects.length * catalogConfig.pricing.convenienceFee;
+  const gst = Math.round(convenienceFee * (catalogConfig.pricing.gstPercent / 100));
   const totalAmount = ticketSubtotal + convenienceFee + gst;
+  const isShowPausedBySystem = Boolean(liveSeatState?.systemPaused);
 
   const toggleSeat = (seat: SeatItem) => {
     if (seat.status !== 'available') return;
@@ -235,14 +308,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
       if (!rowObj) continue;
       // Search outward from center seats
       const available = rowObj.seats;
-      for (let start = 3; start <= SEATS_PER_ROW - count; start++) {
+      for (let start = 3; start <= AUDITORIUM_SEATS_PER_ROW - count; start++) {
         const slice = available.slice(start, start + count);
         if (slice.every((s) => s.status === 'available')) {
           setSelectedSeatIds(slice.map((s) => s.id));
           return;
         }
       }
-      for (let start = 0; start <= SEATS_PER_ROW - count; start++) {
+      for (let start = 0; start <= AUDITORIUM_SEATS_PER_ROW - count; start++) {
         const slice = available.slice(start, start + count);
         if (slice.every((s) => s.status === 'available')) {
           setSelectedSeatIds(slice.map((s) => s.id));
@@ -270,7 +343,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setSelectedTheatre(theatre);
     setSelectedShowtime(slot);
     setSelectedSeatIds([]);
-    setLockSecondsLeft(300);
+    setLockSecondsLeft(activeLockDuration);
     setSeatLimitWarning(false);
   };
 
@@ -414,7 +487,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     Pick a Date & Showtime in {city}
                   </h3>
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-                    {DATE_OPTIONS.map((d, idx) => {
+                    {SHOW_DATE_OPTIONS.map((d, idx) => {
                       const active = idx === selectedDateIdx;
                       return (
                         <button
@@ -576,6 +649,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               {seatLimitWarning && (
                 <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-300">
                   You can select up to {MAX_SELECTABLE_SEATS} seats per booking.
+                </p>
+              )}
+              {isShowPausedBySystem && (
+                <p className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">
+                  Booking for this showtime is temporarily paused by the System Seat Engine.
                 </p>
               )}
 
@@ -741,8 +819,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <div className="mt-6">
                 <button
                   type="button"
-                  disabled={selectedSeatObjects.length === 0 || !selectedTheatre || !selectedShowtime}
+                  disabled={
+                    isShowPausedBySystem ||
+                    selectedSeatObjects.length === 0 ||
+                    !selectedTheatre ||
+                    !selectedShowtime
+                  }
                   onClick={() => {
+                    if (isShowPausedBySystem) return;
                     if (!canBook) {
                       onRequireAuth(
                         needsEmailVerification
@@ -773,7 +857,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <Lock className="h-4 w-4" aria-hidden="true" />
                   )}
                   <span>
-                    {!canBook
+                    {isShowPausedBySystem
+                      ? 'Showtime Paused by System'
+                      : !canBook
                       ? needsEmailVerification
                         ? 'Verify Email to Continue'
                         : 'Sign In to Pay'

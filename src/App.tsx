@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AD_SLIDES, MOVIES as FALLBACK_MOVIES } from './data/movies';
-import { AdSlide, BookingRecord, CategoryTab, GenderOption, isProfileComplete, Movie, UserProfile } from './types/cinema';
-import { Header } from './components/Header';
+import {
+  AdSlide,
+  BookingRecord,
+  buildShowKey,
+  CategoryTab,
+  DEFAULT_PLATFORM_CATALOG,
+  GenderOption,
+  isProfileComplete,
+  Movie,
+  PlatformCatalogConfig,
+  UserProfile,
+} from './types/cinema';
+import { AppViewMode, Header } from './components/Header';
 import { FloatingAdCarousel } from './components/FloatingAdCarousel';
 import { MovieGrid } from './components/MovieGrid';
 import { Footer } from './components/Footer';
@@ -22,10 +33,20 @@ import {
   subscribeUserCalendarAlerts,
   upsertUserPrivateProfile,
 } from './services/firebaseUserService';
+import {
+  commitSoldSeats,
+  createTicketPass,
+  resolveEffectiveRole,
+  subscribeMyRoleAssignment,
+  subscribePlatformCatalogConfig,
+} from './services/rbacService';
 import { SignInModal } from './components/SignInModal';
 import { MyTicketsModal } from './components/MyTicketsModal';
 import { MentorGuideModal } from './components/MentorGuideModal';
 import { ProfilePage } from './components/ProfilePage';
+import { AdminConsole } from './components/AdminConsole';
+import { StaffConsole } from './components/StaffConsole';
+import { SystemConsole } from './components/SystemConsole';
 
 const PENDING_PROFILE_PREFIX = 'cinnova_pending_profile_';
 
@@ -77,7 +98,10 @@ export default function App() {
   }, [isDark]);
 
   // Navigation, search, and city state
-  const [activeView, setActiveView] = useState<'home' | 'profile'>('home');
+  const [activeView, setActiveView] = useState<AppViewMode>('home');
+  const [catalogConfig, setCatalogConfig] = useState<PlatformCatalogConfig>(
+    DEFAULT_PLATFORM_CATALOG
+  );
   const [activeTab, setActiveTab] = useState<CategoryTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
@@ -181,6 +205,7 @@ export default function App() {
             pending?.preferredFormat ?? (sameUid ? prev?.preferredFormat : undefined),
           provider,
           emailVerified: fbUser.emailVerified,
+          role: resolveEffectiveRole(fbUser.email, sameUid ? prev?.role : undefined),
         };
       });
       setAuthReady(true);
@@ -190,6 +215,26 @@ export default function App() {
       unsubAuth();
     };
   }, []);
+
+  // Subscribe globally to Admin-controlled movie pricing & catalog visibility
+  useEffect(() => {
+    const unsub = subscribePlatformCatalogConfig(setCatalogConfig);
+    return () => unsub();
+  }, []);
+
+  // Resolve verified user's RBAC role ('user' | 'admin' | 'staff' | 'system')
+  useEffect(() => {
+    if (!user?.email || !user.emailVerified) return;
+    const unsub = subscribeMyRoleAssignment(user.email, (assignedRole) => {
+      const effectiveRole = resolveEffectiveRole(user.email, assignedRole);
+      setUser((prev) =>
+        prev && prev.email === user.email && prev.role !== effectiveRole
+          ? { ...prev, role: effectiveRole }
+          : prev
+      );
+    });
+    return () => unsub();
+  }, [user?.email, user?.emailVerified]);
 
   // Automatically route newly signed-up or incomplete-profile users to Profile Page first
   useEffect(() => {
@@ -250,8 +295,16 @@ export default function App() {
           } else {
             setUser((prev) =>
               prev && prev.uid === savedProfile.uid
-                ? { ...prev, ...savedProfile, emailVerified: true }
-                : savedProfile
+                ? {
+                    ...prev,
+                    ...savedProfile,
+                    emailVerified: true,
+                    role: resolveEffectiveRole(savedProfile.email, prev?.role),
+                  }
+                : {
+                    ...savedProfile,
+                    role: resolveEffectiveRole(savedProfile.email),
+                  }
             );
             if (savedProfile.preferredCity) {
               setSelectedCity(savedProfile.preferredCity);
@@ -437,6 +490,7 @@ export default function App() {
           profile.preferredFormat ??
           pending?.preferredFormat ??
           (sameUid ? prev?.preferredFormat : undefined),
+        role: resolveEffectiveRole(profile.email, sameUid ? prev?.role : profile.role),
       };
       if (!isProfileComplete(merged)) {
         setActiveView('profile');
@@ -607,13 +661,27 @@ export default function App() {
     }
   };
 
-  // Dynamic genre chips extracted from active movie list
+  // Complete movie catalog passed to Admin / Staff / System consoles
+  const allKnownMovies = useMemo(() => {
+    const map = new Map<string, Movie>();
+    [...catalogMovies, ...upcomingAdMovies, ...FALLBACK_MOVIES].forEach((m) => {
+      if (!map.has(m.id)) map.set(m.id, m);
+    });
+    return Array.from(map.values());
+  }, [catalogMovies, upcomingAdMovies]);
+
+  const hiddenMovieSet = useMemo(
+    () => new Set(catalogConfig.hiddenMovieIds),
+    [catalogConfig.hiddenMovieIds]
+  );
+
+  // Dynamic genre chips extracted from active visible movie list
   const availableGenres = useMemo(() => {
-    const baseList = searchResults ?? catalogMovies;
+    const baseList = (searchResults ?? catalogMovies).filter((m) => !hiddenMovieSet.has(m.id));
     const genreSet = new Set<string>();
     baseList.forEach((m) => m.genres.forEach((g) => genreSet.add(g)));
     return ['All', ...Array.from(genreSet)];
-  }, [catalogMovies, searchResults]);
+  }, [catalogMovies, searchResults, hiddenMovieSet]);
 
   // Reset selected genre if it doesn't exist in newly loaded TMDB category
   useEffect(() => {
@@ -624,12 +692,13 @@ export default function App() {
 
   const filteredMovies = useMemo(() => {
     if (searchResults !== null) {
+      const visibleSearch = searchResults.filter((m) => !hiddenMovieSet.has(m.id));
       return selectedGenre === 'All'
-        ? searchResults
-        : searchResults.filter((m) => m.genres.includes(selectedGenre));
+        ? visibleSearch
+        : visibleSearch.filter((m) => m.genres.includes(selectedGenre));
     }
 
-    let list = [...catalogMovies];
+    let list = catalogMovies.filter((m) => !hiddenMovieSet.has(m.id));
 
     if (dataSource === 'local') {
       if (activeTab === 'now-showing') {
@@ -658,15 +727,16 @@ export default function App() {
     }
 
     return list;
-  }, [catalogMovies, searchResults, dataSource, activeTab, selectedGenre, searchQuery]);
+  }, [catalogMovies, searchResults, hiddenMovieSet, dataSource, activeTab, selectedGenre, searchQuery]);
 
-  // Dynamic Floating Ad Slides: showcase upcoming movies strictly from the TMDB database
+  // Dynamic Floating Ad Slides: showcase visible upcoming movies from TMDB
   const activeAdSlides: AdSlide[] = useMemo(() => {
-    if (upcomingAdMovies.length > 0) {
-      const spotlightPool = upcomingAdMovies.filter(
+    const visibleUpcoming = upcomingAdMovies.filter((m) => !hiddenMovieSet.has(m.id));
+    if (visibleUpcoming.length > 0) {
+      const spotlightPool = visibleUpcoming.filter(
         (m) => Boolean(m.backdropImage && m.synopsis && m.synopsis.trim().length > 0)
       );
-      const chosen = (spotlightPool.length > 0 ? spotlightPool : upcomingAdMovies).slice(0, 5);
+      const chosen = (spotlightPool.length > 0 ? spotlightPool : visibleUpcoming).slice(0, 5);
       return chosen.map((m) => ({
         id: `tmdb-upcoming-ad-${m.id}`,
         kicker: 'Upcoming Movie Spotlight',
@@ -678,8 +748,9 @@ export default function App() {
         movie: m,
       }));
     }
-    return AD_SLIDES;
-  }, [upcomingAdMovies]);
+    const visibleFallbackAds = AD_SLIDES.filter((s) => !hiddenMovieSet.has(s.movieId));
+    return visibleFallbackAds.length > 0 ? visibleFallbackAds : AD_SLIDES;
+  }, [upcomingAdMovies, hiddenMovieSet]);
 
   const handleSelectAdSlide = (slide: AdSlide) => {
     const found =
@@ -725,6 +796,8 @@ export default function App() {
         );
       });
 
+    createTicketPass(booking, user.uid, user.name || 'CinNova Member').catch(() => {});
+
     if (pendingCheckout) {
       const dateOptionsMap: Record<string, string> = {
         'Wed, 25 Nov': 'today',
@@ -733,13 +806,32 @@ export default function App() {
         'Sat, 28 Nov': 'sat',
       };
       const dateId = dateOptionsMap[pendingCheckout.dateLabel] || 'today';
-      const showKey = `${pendingCheckout.movie.id}__${pendingCheckout.city}__${pendingCheckout.theatre.id}__${dateId}__${pendingCheckout.showtime.id}`;
+      const showKey = buildShowKey(
+        pendingCheckout.movie.id,
+        pendingCheckout.city,
+        pendingCheckout.theatre.id,
+        dateId,
+        pendingCheckout.showtime.id
+      );
       const newSeatIds = pendingCheckout.seats.map((s) => s.id);
 
       setSoldSeatMap((prev) => ({
         ...prev,
         [showKey]: Array.from(new Set([...(prev[showKey] || []), ...newSeatIds])),
       }));
+
+      commitSoldSeats(
+        {
+          showKey,
+          movieId: pendingCheckout.movie.id,
+          city: pendingCheckout.city,
+          theatreId: pendingCheckout.theatre.id,
+          dateId,
+          showtimeId: pendingCheckout.showtime.id,
+        },
+        newSeatIds,
+        user.uid
+      );
     }
   };
 
@@ -832,7 +924,13 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={() => setIsDark((prev) => !prev)}
         activeTab={activeTab}
-        activeView={isOnboardingProfile || (activeView === 'profile' && user) ? 'profile' : 'home'}
+        activeView={
+          isOnboardingProfile
+            ? 'profile'
+            : user
+            ? activeView
+            : 'home'
+        }
         isOnboardingProfile={isOnboardingProfile}
         onSelectTab={handleSelectNavTab}
         onOpenProfile={() => {
@@ -842,6 +940,14 @@ export default function App() {
           } else {
             openSignInWithPrompt('Sign in to view and manage your CinNova profile.');
           }
+        }}
+        onOpenView={(view) => {
+          if (!user || isOnboardingProfile) return;
+          if (view === 'admin' && user.role !== 'admin') return;
+          if (view === 'staff' && user.role !== 'staff' && user.role !== 'admin') return;
+          if (view === 'system' && user.role !== 'system' && user.role !== 'admin') return;
+          setActiveView(view);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         bookingsCount={bookings.length}
         onOpenMyBookings={() => {
@@ -878,6 +984,28 @@ export default function App() {
               openSignInWithPrompt('Verify your email to sync your profile with Firestore.')
             }
             onSignOut={handleSignOut}
+          />
+        ) : activeView === 'admin' && user?.role === 'admin' ? (
+          <AdminConsole
+            user={user}
+            movies={allKnownMovies}
+            catalogConfig={catalogConfig}
+            onOptimisticConfigChange={setCatalogConfig}
+            onBackToUserPlatform={() => setActiveView('home')}
+          />
+        ) : activeView === 'staff' && (user?.role === 'staff' || user?.role === 'admin') ? (
+          <StaffConsole
+            user={user}
+            movies={allKnownMovies}
+            defaultCity={selectedCity}
+            onBackToUserPlatform={() => setActiveView('home')}
+          />
+        ) : activeView === 'system' && (user?.role === 'system' || user?.role === 'admin') ? (
+          <SystemConsole
+            user={user}
+            movies={allKnownMovies}
+            defaultCity={selectedCity}
+            onBackToUserPlatform={() => setActiveView('home')}
           />
         ) : (
           <>
@@ -933,6 +1061,9 @@ export default function App() {
         movie={selectedMovie}
         city={selectedCity}
         soldSeatMap={soldSeatMap}
+        catalogConfig={catalogConfig}
+        currentUserUid={user?.uid}
+        currentUserName={user?.name}
         canBook={canBook}
         needsEmailVerification={needsEmailVerification}
         isNotified={Boolean(user && selectedMovie && notifiedIds.includes(selectedMovie.id))}

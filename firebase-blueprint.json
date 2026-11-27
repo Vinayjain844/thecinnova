@@ -103,7 +103,7 @@
         },
         "paymentId": {
           "type": "string",
-          "description": "Demo payment transaction reference.",
+          "description": "Payment transaction reference.",
           "minLength": 4,
           "maxLength": 64
         },
@@ -302,6 +302,315 @@
         }
       },
       "required": ["uid", "movieId", "title", "releaseDate", "genres", "language", "createdAt"]
+    },
+    "RoleAssignment": {
+      "title": "RoleAssignment",
+      "description": "RBAC role assignment keyed by sanitized email address managed strictly by Admins.",
+      "type": "object",
+      "properties": {
+        "emailKey": {
+          "type": "string",
+          "description": "Sanitized lowercase email key matching document ID.",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Target user email address.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "description": "Assigned RBAC role.",
+          "enum": ["user", "admin", "staff", "system"]
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional staff/operator label or theatre assignment.",
+          "maxLength": 80
+        },
+        "assignedBy": {
+          "type": "string",
+          "description": "Admin email who granted the role.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when assignment was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when assignment was last updated."
+        }
+      },
+      "required": ["emailKey", "email", "role", "assignedBy", "createdAt", "updatedAt"]
+    },
+    "PlatformCatalogConfig": {
+      "title": "PlatformCatalogConfig",
+      "description": "Admin-controlled movie catalog visibility and ticket tier pricing.",
+      "type": "object",
+      "properties": {
+        "pricing": {
+          "type": "object",
+          "description": "Global seat tier and fee pricing structure."
+        },
+        "hiddenMovieIds": {
+          "type": "array",
+          "description": "Bounded list of movie IDs hidden from the user platform (max 200)."
+        },
+        "moviePriceMultipliers": {
+          "type": "object",
+          "description": "Optional per-movie ticket price multipliers keyed by movie ID."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Admin email who last saved catalog pricing/visibility.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last admin update."
+        }
+      },
+      "required": ["pricing", "hiddenMovieIds", "moviePriceMultipliers", "updatedBy", "updatedAt"]
+    },
+    "ShowtimeSeatState": {
+      "title": "ShowtimeSeatState",
+      "description": "Real-time auditorium seat availability, holds, and system blocks for a showtime.",
+      "type": "object",
+      "properties": {
+        "showKey": {
+          "type": "string",
+          "description": "Unique showtime key matching document ID.",
+          "minLength": 5,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "movieId": {
+          "type": "string",
+          "description": "Movie identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "city": {
+          "type": "string",
+          "description": "City name.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "theatreId": {
+          "type": "string",
+          "description": "Theatre identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "dateId": {
+          "type": "string",
+          "description": "Show date key.",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "showtimeId": {
+          "type": "string",
+          "description": "Showtime slot ID.",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "soldSeats": {
+          "type": "array",
+          "description": "Confirmed sold seat codes (max 126)."
+        },
+        "blockedSeats": {
+          "type": "array",
+          "description": "Staff/System blocked or maintenance seat codes (max 126)."
+        },
+        "seatLocks": {
+          "type": "object",
+          "description": "Active real-time seat lock map keyed by seat ID."
+        },
+        "lockDurationSeconds": {
+          "type": "integer",
+          "description": "System-controlled seat hold duration in seconds (30-900)."
+        },
+        "systemPaused": {
+          "type": "boolean",
+          "description": "System real-time pause switch for this showtime."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "UID or operator email that updated seat state.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last real-time seat mutation."
+        }
+      },
+      "required": [
+        "showKey",
+        "movieId",
+        "city",
+        "theatreId",
+        "dateId",
+        "showtimeId",
+        "soldSeats",
+        "blockedSeats",
+        "seatLocks",
+        "lockDurationSeconds",
+        "systemPaused",
+        "updatedBy",
+        "updatedAt"
+      ]
+    },
+    "TicketPass": {
+      "title": "TicketPass",
+      "description": "Non-PII M-Ticket verification pass scanned and checked in by Theatre Staff.",
+      "type": "object",
+      "properties": {
+        "bookingId": {
+          "type": "string",
+          "description": "Booking ID matching document ID.",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "description": "Ticket owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holderName": {
+          "type": "string",
+          "description": "Display name on ticket pass.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "movieId": {
+          "type": "string",
+          "description": "Movie ID.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "movieTitle": {
+          "type": "string",
+          "description": "Movie title.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "city": {
+          "type": "string",
+          "description": "Cinema city.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "theatreName": {
+          "type": "string",
+          "description": "Theatre name.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "theatreArea": {
+          "type": "string",
+          "description": "Theatre locality.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "dateLabel": {
+          "type": "string",
+          "description": "Formatted show date.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "showtime": {
+          "type": "string",
+          "description": "Showtime slot label.",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "format": {
+          "type": "string",
+          "description": "Projection format.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "screen": {
+          "type": "string",
+          "description": "Auditorium screen identifier.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "seats": {
+          "type": "array",
+          "description": "Booked seat codes (max 8 seats)."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount paid."
+        },
+        "status": {
+          "type": "string",
+          "description": "Verification status controlled by Staff/Admin.",
+          "enum": ["valid", "checked-in", "cancelled"]
+        },
+        "bookedAt": {
+          "type": "string",
+          "description": "Display booking timestamp.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "checkedInAt": {
+          "type": "string",
+          "description": "ISO timestamp when checked in by staff.",
+          "maxLength": 60
+        },
+        "checkedInBy": {
+          "type": "string",
+          "description": "Staff email who scanned the pass.",
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when pass was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when pass was last updated."
+        }
+      },
+      "required": [
+        "bookingId",
+        "uid",
+        "holderName",
+        "movieId",
+        "movieTitle",
+        "city",
+        "theatreName",
+        "theatreArea",
+        "dateLabel",
+        "showtime",
+        "format",
+        "screen",
+        "seats",
+        "totalAmount",
+        "status",
+        "bookedAt",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -316,6 +625,22 @@
     "/users/{userId}/calendarAlerts/{movieId}": {
       "schema": { "$ref": "#/entities/CalendarAlert" },
       "description": "Upcoming movie release calendar reminders for the user."
+    },
+    "/roleAssignments/{emailKey}": {
+      "schema": { "$ref": "#/entities/RoleAssignment" },
+      "description": "Admin-managed role assignments for Staff, System, and additional Admins."
+    },
+    "/platformConfig/catalog": {
+      "schema": { "$ref": "#/entities/PlatformCatalogConfig" },
+      "description": "Admin-managed ticket tier prices, movie visibility, and per-movie price multipliers."
+    },
+    "/showtimeSeats/{showKey}": {
+      "schema": { "$ref": "#/entities/ShowtimeSeatState" },
+      "description": "Real-time auditorium seat map state controlled by System, Staff, and booking locks."
+    },
+    "/ticketPasses/{bookingId}": {
+      "schema": { "$ref": "#/entities/TicketPass" },
+      "description": "Non-PII ticket verification passes scanned by Theatre Staff."
     }
   }
 }

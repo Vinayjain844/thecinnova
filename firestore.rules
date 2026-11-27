@@ -37,6 +37,42 @@ service cloud.firestore {
       return val is string && val.size() >= minLen && val.size() <= maxLen;
     }
 
+    function currentUserEmailKey() {
+      return ('email' in request.auth.token && request.auth.token.email is string)
+        ? request.auth.token.email.lower().replace('[^a-z0-9]', '_')
+        : '';
+    }
+
+    function isBootstrapAdmin() {
+      return isVerifiedUser()
+        && 'email' in request.auth.token
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in [
+          '26tc1vi148@mitsgwl.ac.in',
+          '26tc1ta137@mitsgwl.ac.in'
+        ];
+    }
+
+    function hasAssignedRole(roleName) {
+      let key = currentUserEmailKey();
+      return isVerifiedUser()
+        && key.size() > 0
+        && exists(/databases/$(database)/documents/roleAssignments/$(key))
+        && get(/databases/$(database)/documents/roleAssignments/$(key)).data.role == roleName;
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() || hasAssignedRole('admin');
+    }
+
+    function isStaff() {
+      return isAdmin() || hasAssignedRole('staff');
+    }
+
+    function isSystem() {
+      return isAdmin() || hasAssignedRole('system');
+    }
+
     // --- Entity Validation Blueprints ---
     function isValidUserPrivateProfile(data, userId) {
       return data.keys().hasAll(['uid', 'name', 'email', 'preferredCity', 'provider', 'createdAt', 'updatedAt'])
@@ -132,6 +168,112 @@ service cloud.firestore {
         && data.createdAt == request.time;
     }
 
+    function isValidRoleAssignment(data, emailKey) {
+      return data.keys().hasAll(['emailKey', 'email', 'role', 'assignedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['emailKey', 'email', 'role', 'label', 'assignedBy', 'createdAt', 'updatedAt'])
+        && data.emailKey == emailKey
+        && isValidId(data.emailKey)
+        && isBoundedString(data.email, 3, 160)
+        && data.role in ['user', 'admin', 'staff', 'system']
+        && (!('label' in data) || isBoundedString(data.label, 0, 80))
+        && isBoundedString(data.assignedBy, 3, 160)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlatformCatalog(data) {
+      return data.keys().hasAll(['pricing', 'hiddenMovieIds', 'moviePriceMultipliers', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['pricing', 'hiddenMovieIds', 'moviePriceMultipliers', 'updatedBy', 'updatedAt'])
+        && data.pricing is map
+        && data.pricing.keys().hasAll(['royalRecliner', 'primeExecutive', 'classic', 'convenienceFee', 'gstPercent'])
+        && data.pricing.keys().hasOnly(['royalRecliner', 'primeExecutive', 'classic', 'convenienceFee', 'gstPercent'])
+        && (data.pricing.royalRecliner is int || data.pricing.royalRecliner is float) && data.pricing.royalRecliner >= 50 && data.pricing.royalRecliner <= 5000
+        && (data.pricing.primeExecutive is int || data.pricing.primeExecutive is float) && data.pricing.primeExecutive >= 50 && data.pricing.primeExecutive <= 5000
+        && (data.pricing.classic is int || data.pricing.classic is float) && data.pricing.classic >= 50 && data.pricing.classic <= 5000
+        && (data.pricing.convenienceFee is int || data.pricing.convenienceFee is float) && data.pricing.convenienceFee >= 0 && data.pricing.convenienceFee <= 500
+        && (data.pricing.gstPercent is int || data.pricing.gstPercent is float) && data.pricing.gstPercent >= 0 && data.pricing.gstPercent <= 50
+        && data.hiddenMovieIds is list
+        && data.hiddenMovieIds.size() <= 200
+        && (data.hiddenMovieIds.size() == 0 || (data.hiddenMovieIds[0] is string && data.hiddenMovieIds[0].size() >= 1 && data.hiddenMovieIds[0].size() <= 64))
+        && data.moviePriceMultipliers is map
+        && data.moviePriceMultipliers.size() <= 200
+        && isBoundedString(data.updatedBy, 3, 160)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidShowtimeSeats(data, showKey) {
+      return data.keys().hasAll([
+          'showKey', 'movieId', 'city', 'theatreId', 'dateId', 'showtimeId',
+          'soldSeats', 'blockedSeats', 'seatLocks', 'lockDurationSeconds',
+          'systemPaused', 'updatedBy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'showKey', 'movieId', 'city', 'theatreId', 'dateId', 'showtimeId',
+          'soldSeats', 'blockedSeats', 'seatLocks', 'lockDurationSeconds',
+          'systemPaused', 'updatedBy', 'updatedAt'
+        ])
+        && data.showKey == showKey
+        && isValidId(data.showKey)
+        && isBoundedString(data.movieId, 1, 64)
+        && isBoundedString(data.city, 1, 60)
+        && isBoundedString(data.theatreId, 1, 64)
+        && isBoundedString(data.dateId, 1, 32)
+        && isBoundedString(data.showtimeId, 1, 32)
+        && data.soldSeats is list
+        && data.soldSeats.size() <= 126
+        && (data.soldSeats.size() == 0 || (data.soldSeats[0] is string && data.soldSeats[0].size() <= 10))
+        && data.blockedSeats is list
+        && data.blockedSeats.size() <= 126
+        && (data.blockedSeats.size() == 0 || (data.blockedSeats[0] is string && data.blockedSeats[0].size() <= 10))
+        && data.seatLocks is map
+        && data.seatLocks.size() <= 126
+        && data.lockDurationSeconds is int
+        && data.lockDurationSeconds >= 30
+        && data.lockDurationSeconds <= 900
+        && data.systemPaused is bool
+        && isBoundedString(data.updatedBy, 1, 160)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTicketPass(data, bookingId) {
+      return data.keys().hasAll([
+          'bookingId', 'uid', 'holderName', 'movieId', 'movieTitle', 'city',
+          'theatreName', 'theatreArea', 'dateLabel', 'showtime', 'format',
+          'screen', 'seats', 'totalAmount', 'status', 'bookedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingId', 'uid', 'holderName', 'movieId', 'movieTitle', 'city',
+          'theatreName', 'theatreArea', 'dateLabel', 'showtime', 'format',
+          'screen', 'seats', 'totalAmount', 'status', 'bookedAt',
+          'checkedInAt', 'checkedInBy', 'createdAt', 'updatedAt'
+        ])
+        && data.bookingId == bookingId
+        && isValidId(data.bookingId)
+        && isValidId(data.uid)
+        && isBoundedString(data.holderName, 1, 80)
+        && isBoundedString(data.movieId, 1, 64)
+        && isBoundedString(data.movieTitle, 1, 160)
+        && isBoundedString(data.city, 1, 60)
+        && isBoundedString(data.theatreName, 1, 140)
+        && isBoundedString(data.theatreArea, 1, 140)
+        && isBoundedString(data.dateLabel, 1, 40)
+        && isBoundedString(data.showtime, 1, 30)
+        && isBoundedString(data.format, 1, 40)
+        && isBoundedString(data.screen, 1, 40)
+        && data.seats is list
+        && data.seats.size() >= 1
+        && data.seats.size() <= 8
+        && data.seats[0] is string
+        && data.seats[0].size() <= 10
+        && (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0
+        && data.status in ['valid', 'checked-in', 'cancelled']
+        && isBoundedString(data.bookedAt, 1, 60)
+        && (!('checkedInAt' in data) || isBoundedString(data.checkedInAt, 0, 60))
+        && (!('checkedInBy' in data) || isBoundedString(data.checkedInBy, 0, 160))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     // --- Collection Rules ---
     match /users/{userId} {
       allow read, write: if false;
@@ -180,6 +322,106 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isValidId(userId) && isValidId(movieId) && isOwner(userId) && existing().uid == request.auth.uid;
       }
+    }
+
+    match /roleAssignments/{emailKey} {
+      allow get: if isValidId(emailKey) && isVerifiedUser() && (emailKey == currentUserEmailKey() || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(emailKey)
+        && isAdmin()
+        && isValidRoleAssignment(incoming(), emailKey)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(emailKey)
+        && isAdmin()
+        && isValidRoleAssignment(incoming(), emailKey)
+        && incoming().emailKey == existing().emailKey
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'label', 'assignedBy', 'updatedAt']);
+      allow delete: if isValidId(emailKey) && isAdmin();
+    }
+
+    match /platformConfig/catalog {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isAdmin()
+        && isValidPlatformCatalog(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /showtimeSeats/{showKey} {
+      allow get: if isValidId(showKey);
+      allow list: if isStaff() || isSystem();
+      allow create: if isValidId(showKey)
+        && isVerifiedUser()
+        && isValidShowtimeSeats(incoming(), showKey)
+        && incoming().updatedAt == request.time
+        && (
+          isSystem()
+          || isStaff()
+          || (
+            incoming().blockedSeats.size() == 0
+            && incoming().systemPaused == false
+            && incoming().lockDurationSeconds == 300
+          )
+        );
+      allow update: if isValidId(showKey)
+        && isVerifiedUser()
+        && isValidShowtimeSeats(incoming(), showKey)
+        && incoming().showKey == existing().showKey
+        && incoming().updatedAt == request.time
+        && (
+          isSystem()
+          || (
+            isStaff()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'blockedSeats', 'soldSeats', 'seatLocks', 'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'seatLocks', 'soldSeats', 'updatedBy', 'updatedAt'
+            ])
+            && incoming().soldSeats.hasAll(existing().soldSeats)
+          )
+        );
+      allow delete: if isValidId(showKey) && isSystem();
+    }
+
+    match /ticketPasses/{bookingId} {
+      allow get: if isValidId(bookingId)
+        && isVerifiedUser()
+        && (existing().uid == request.auth.uid || isStaff());
+      allow list: if (isVerifiedUser() && resource.data.uid == request.auth.uid) || isStaff();
+      allow create: if isValidId(bookingId)
+        && isVerifiedUser()
+        && isValidTicketPass(incoming(), bookingId)
+        && incoming().uid == request.auth.uid
+        && incoming().status == 'valid'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(bookingId)
+        && isStaff()
+        && isValidTicketPass(incoming(), bookingId)
+        && incoming().bookingId == existing().bookingId
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            existing().status == 'valid'
+            && incoming().status in ['checked-in', 'cancelled']
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'checkedInAt', 'checkedInBy', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(bookingId)
+        && (isAdmin() || (isVerifiedUser() && existing().uid == request.auth.uid));
     }
   }
 }

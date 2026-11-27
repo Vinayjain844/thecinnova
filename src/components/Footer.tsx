@@ -29,11 +29,13 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-lime-300 ring-1 ring-blue-500/40">
-                <svg viewBox="0 0 32 32" className="h-4 w-4" fill="none" aria-hidden="true">
-                  <rect x="4" y="6" width="24" height="20" rx="4" stroke="currentColor" strokeWidth="2.2" />
-                  <polygon points="13,11 22,16 13,21" fill="currentColor" />
-                </svg>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#070910] ring-1 ring-blue-500/40 dark:ring-lime-400/35">
+                <img
+                  src="/cinnova-logo.jpg"
+                  alt="CinNova Logo"
+                  referrerPolicy="no-referrer"
+                  className="h-full w-full object-cover"
+                />
               </div>
               <span className="font-display text-lg font-bold tracking-tight text-[#070910] dark:text-slate-100">
                 Cin<span className="text-blue-600 dark:text-lime-400">Nova</span>
